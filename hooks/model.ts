@@ -88,15 +88,17 @@ function sessionOfLive(live: Live): RosterSession {
 
 /** The rooms of the office: one per sidebar group, then the pinned, then the lobby. */
 export function buildRooms(roster: Roster | undefined, lives: Record<string, Live>, me: Live, now: number): Room[] {
+  // The app's own spare sessions (titled `spare-…`) are not the person's chats.
+  const isSpare = (title: string): boolean => /^spare-/.test(title)
   const byId = new Map<string, RosterSession>()
-  for (const s of roster?.sessions ?? []) byId.set(s.id, s)
+  for (const s of roster?.sessions ?? []) if (!isSpare(s.title)) byId.set(s.id, s)
   const liveByKey = new Map<string, Live>()
   for (const live of Object.values(lives)) liveByKey.set(keyOf(live), live)
   const meKey = keyOf(me)
   // A session the roster does not list yet (this one, or one just started) is known by its live entry.
   for (const live of [me, ...Object.values(lives)]) {
     const key = keyOf(live)
-    if (key !== '' && !byId.has(key)) byId.set(key, sessionOfLive(live))
+    if (key !== '' && !byId.has(key) && !isSpare(live.title)) byId.set(key, sessionOfLive(live))
   }
   // This session is always in: its own entry is as fresh as this draw.
   const liveOf = (id: string): Live | undefined => (id === meKey ? { ...me, at: now } : liveByKey.get(id))

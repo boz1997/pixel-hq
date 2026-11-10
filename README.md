@@ -48,6 +48,7 @@ What you see:
 - **Subagents** sit at the meeting table while they work, then carry their paper to their session's desk and leave.
 - **The manager** says how the office is doing, keeps the CONTEXT and USAGE boards and a bin that fills with the picked session's context. The windows follow the time of day.
 - **Click** a person or a desk for the session: its state, its subagents, its last twenty tool calls, and a button that opens it in Claude.
+- **Calm or lively**, top right: calm keeps everyone at their desk, like the pane; lively lets them go to the library, the studio, the café and the WC. **Fold a room** you rarely look at by clicking its header (the triangle); both choices are remembered by the browser.
 
 ## Develop
 

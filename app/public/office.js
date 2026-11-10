@@ -21,7 +21,8 @@ const DONE_MS = 90_000
 const IDLE_TO_CAFE_MS = 25_000
 const WC_MS = 15_000
 const DELIVER_MS = 2_500
-const SPEED = 1.5
+const SPEED = 90 // px per second
+const SIM_MS = 40
 
 const ROOMS_LEFT = {
   office: { top: 0, h: 10, name: 'MANAGER', tint: '#e9dcc0' },
@@ -75,6 +76,36 @@ function shownState(live, now) {
 // ------------------------------------------------------------------ data
 
 const password = { value: sessionStorage.getItem('pixel-hq-password') ?? '' }
+
+/** What this browser chose: a calm office (everyone at their desk) or a lively one, and which rooms are folded. */
+const prefs = {
+  mode: localStorage.getItem('pixel-hq-mode') === 'calm' ? 'calm' : 'lively',
+  collapsed: new Set(JSON.parse(localStorage.getItem('pixel-hq-collapsed') ?? '[]')),
+}
+function setMode(mode) {
+  prefs.mode = mode
+  localStorage.setItem('pixel-hq-mode', mode)
+  document.getElementById('mode-calm').classList.toggle('on', mode === 'calm')
+  document.getElementById('mode-lively').classList.toggle('on', mode === 'lively')
+  for (const e of [...workers.values(), ...helpers.values()]) {
+    e.dest = null
+    e.goal = null
+    if (e.hidden) {
+      e.hidden = false
+      e.wcDone = true
+    }
+  }
+  if (layout) syncEntities(sessionsOf())
+}
+function toggleRoom(id) {
+  if (prefs.collapsed.has(id)) prefs.collapsed.delete(id)
+  else prefs.collapsed.add(id)
+  localStorage.setItem('pixel-hq-collapsed', JSON.stringify([...prefs.collapsed]))
+  onData()
+}
+document.getElementById('mode-calm').addEventListener('click', () => setMode('calm'))
+document.getElementById('mode-lively').addEventListener('click', () => setMode('lively'))
+document.getElementById(prefs.mode === 'calm' ? 'mode-calm' : 'mode-lively').classList.add('on')
 let data = { at: 0, roster: null, lives: {} }
 let fetchedAt = 0
 let isRemote = false
@@ -116,9 +147,11 @@ document.getElementById('gate-form').addEventListener('submit', event => {
 function sessionsOf() {
   const now = Date.now()
   const byKey = new Map()
-  for (const s of data.roster?.sessions ?? []) byKey.set(norm(s.id), { ...s, id: norm(s.id) })
+  const isSpare = s => /^spare-/.test(s.title ?? '')
+  for (const s of data.roster?.sessions ?? []) if (!isSpare(s)) byKey.set(norm(s.id), { ...s, id: norm(s.id) })
   for (const live of Object.values(data.lives)) {
     const key = keyOf(live)
+    if (isSpare(live)) continue
     if (!byKey.has(key)) {
       byKey.set(key, { id: key, ccdId: live.ccdId, title: live.title, cwd: live.cwd, groupId: live.groupId, isPinned: live.isPinned, lastActivityAt: live.at, link: live.link })
     }
@@ -173,7 +206,8 @@ function buildLayout(sessions) {
   const rooms = roomsOf(sessions)
   let top = 0
   const bands = rooms.map((room, i) => {
-    const band = { ...room, top, h: 1 + room.rows * DESK_H + 1, tint: ROOM_TINTS[i % ROOM_TINTS.length] }
+    const isCollapsed = prefs.collapsed.has(room.id)
+    const band = { ...room, top, isCollapsed, h: isCollapsed ? 1 : 1 + room.rows * DESK_H + 1, tint: ROOM_TINTS[i % ROOM_TINTS.length] }
     top += band.h
     return band
   })
@@ -195,16 +229,17 @@ function buildLayout(sessions) {
   for (const band of bands) {
     for (let c = WALL_R; c < COLS; c++) block(c, band.top)
     for (let r = band.top; r < band.top + band.h; r++) if (r !== band.top + 2) block(WALL_R, r)
+    if (band.isCollapsed) continue
     for (const s of band.members) {
       const { slot } = assign.get(s.id)
       const c = WALL_R + 1 + (slot % PER_ROW) * DESK_W
       const r = band.top + 1 + Math.floor(slot / PER_ROW) * DESK_H
       for (let dc = 1; dc <= 4; dc++) for (let dr = 0; dr <= 2; dr++) block(c + dc, r + dr)
-      desks.set(s.id, { c, r, stand: [c + 2, r + 3], side: [c + 3, r + 3], band })
+      desks.set(s.id, { c, r, stand: [c + 2, r + 3], side: [c + 3, r + 3], sides: [[c + 3, r + 3], [c + 4, r + 3], [c + 5, r + 3]], band })
     }
   }
   for (let r = top; r < ROWS; r++) for (let c = WALL_R; c < COLS; c++) block(c, r)
-  return { rooms: bands, ROWS, blocked, desks, entrance: [HALL.x0 + 1, ROWS - 1], signature: JSON.stringify(bands.map(b => [b.id, b.members.map(s => s.id)])) }
+  return { rooms: bands, ROWS, blocked, desks, entrance: [HALL.x0 + 1, ROWS - 1], signature: JSON.stringify(bands.map(b => [b.id, b.isCollapsed, b.members.map(s => s.id)])) }
 }
 
 function isFree(c, r) {
@@ -256,6 +291,19 @@ function takeSeat(zone, id) {
   return null
 }
 
+function takeSide(ownerKey, id) {
+  const desk = layout.desks.get(ownerKey)
+  if (!desk) return null
+  for (const [c, r] of desk.sides) {
+    const k = `side:${ownerKey}:${c},${r}`
+    if (!seated.has(k)) {
+      seated.set(k, id)
+      return { zone: `side:${ownerKey}`, c, r }
+    }
+  }
+  return null
+}
+
 function leaveSeat(entity) {
   if (!entity.seat) return
   seated.delete(`${entity.seat.zone}:${entity.seat.c},${entity.seat.r}`)
@@ -267,6 +315,7 @@ function leaveSeat(entity) {
 const workers = new Map()
 const helpers = new Map()
 const delivered = new Set()
+const everSeen = new Set()
 let manager = null
 let dog = null
 let selected = null
@@ -285,26 +334,32 @@ function walkTo(entity, tile) {
   entity.goal = tile
 }
 
-function step(entity) {
+/** Moves an entity along its path by `dt` seconds; a long gap (a background tab) is caught up in one go. */
+function step(entity, dt) {
   if (entity.path.length === 0) {
     entity.isWalking = false
     return
   }
-  const next = centerOf(entity.path[0])
-  const dx = next.x - entity.x
-  const dy = next.y - entity.y
-  const d = Math.hypot(dx, dy)
-  if (d <= SPEED) {
-    entity.x = next.x
-    entity.y = next.y
-    entity.tile = entity.path.shift()
-  } else {
-    entity.x += (dx / d) * SPEED
-    entity.y += (dy / d) * SPEED
+  let budget = SPEED * Math.min(dt, 3)
+  while (budget > 0 && entity.path.length > 0) {
+    const next = centerOf(entity.path[0])
+    const dx = next.x - entity.x
+    const dy = next.y - entity.y
+    const d = Math.hypot(dx, dy)
     if (Math.abs(dx) > 0.5) entity.dir = dx > 0 ? 1 : -1
+    if (d <= budget) {
+      entity.x = next.x
+      entity.y = next.y
+      entity.tile = entity.path.shift()
+      budget -= d
+    } else {
+      entity.x += (dx / d) * budget
+      entity.y += (dy / d) * budget
+      budget = 0
+    }
   }
-  entity.isWalking = true
-  entity.frame += 1
+  entity.isWalking = entity.path.length > 0
+  entity.frame += Math.max(1, Math.round(dt * 60))
 }
 
 const arrived = entity => entity.path.length === 0 && entity.goal && entity.tile[0] === entity.goal[0] && entity.tile[1] === entity.goal[1]
@@ -314,6 +369,7 @@ function wantedZone(w, now) {
   const live = w.session.live
   const st = w.session.state
   if (st === 'away') return 'exit'
+  if (prefs.mode === 'calm') return 'desk'
   if (w.hidden) return 'wc'
   if (st === 'working' && live?.verb === 'browsing') return 'library'
   if (st === 'working' && live?.verb === 'designing') return 'studio'
@@ -337,8 +393,13 @@ function goTo(entity, zone, ownerKey) {
   leaveSeat(entity)
   let tile = null
   if (zone === 'desk') tile = layout.desks.get(ownerKey)?.stand ?? null
-  else if (zone === 'side') tile = layout.desks.get(ownerKey)?.side ?? null
-  else if (zone === 'exit') tile = layout.entrance
+  else if (zone === 'side') {
+    const seat = takeSide(ownerKey, entity.id)
+    if (seat) {
+      entity.seat = seat
+      tile = [seat.c, seat.r]
+    } else tile = layout.desks.get(ownerKey)?.side ?? null
+  } else if (zone === 'exit') tile = layout.entrance
   else {
     const seat = takeSeat(zone, entity.id)
     if (seat) {
@@ -351,7 +412,8 @@ function goTo(entity, zone, ownerKey) {
   }
   if (!tile) return
   entity.dest = zone
-  if (isFirstLoad || !layout.desks.size) {
+  if (isFirstLoad || entity.placeDirectly || !layout.desks.size) {
+    entity.placeDirectly = false
     entity.x = centerOf(tile).x
     entity.y = centerOf(tile).y
     entity.tile = tile
@@ -366,10 +428,23 @@ function syncEntities(sessions) {
   for (const s of sessions) {
     seen.add(s.id)
     let w = workers.get(s.id)
+    if (!layout.desks.has(s.id)) {
+      // Its room is folded away: nobody of it is on the floor.
+      if (w) {
+        leaveSeat(w)
+        workers.delete(s.id)
+      }
+      for (const [id, e] of helpers) if (e.owner === s.id) {
+        leaveSeat(e)
+        helpers.delete(id)
+      }
+      continue
+    }
     if (!w && s.state !== 'away') {
-      w = spawn('worker', layout.entrance, { id: s.id, session: s, look: lookOf(hash(s.id)), nextTrip: now + rnd(90_000, 240_000), wcDone: true, sayAt: now + rnd(3000, 15000) })
+      w = spawn('worker', layout.entrance, { id: s.id, session: s, look: lookOf(hash(s.id)), nextTrip: now + rnd(90_000, 240_000), wcDone: true, sayAt: now + rnd(3000, 15000), placeDirectly: everSeen.has(s.id) })
       workers.set(s.id, w)
     }
+    everSeen.add(s.id)
     if (!w) continue
     w.session = s
     const zone = wantedZone(w, now)
@@ -386,7 +461,8 @@ function syncEntities(sessions) {
       if (delivered.has(id)) continue
       let e = helpers.get(id)
       if (!e) {
-        e = spawn('helper', layout.entrance, { id, owner: s.id, seed: hash(h.id), helper: h, phase: h.isDone ? 'delivering' : 'working' })
+        e = spawn('helper', layout.entrance, { id, owner: s.id, seed: hash(h.id), helper: h, phase: h.isDone ? 'delivering' : 'working', placeDirectly: everSeen.has(id) })
+        everSeen.add(id)
         helpers.set(id, e)
         if (h.isDone && isFirstLoad) {
           delivered.add(id)
@@ -396,7 +472,7 @@ function syncEntities(sessions) {
       }
       e.helper = h
       if (h.isDone && e.phase === 'working') e.phase = 'delivering'
-      if (e.phase === 'working') goTo(e, 'meeting', s.id)
+      if (e.phase === 'working') goTo(e, prefs.mode === 'calm' ? 'side' : 'meeting', s.id)
       else if (e.phase === 'delivering') goTo(e, 'side', s.id)
     }
     for (const [id, e] of helpers) {
@@ -719,8 +795,10 @@ function drawBands(now) {
     }
     const present = band.members.filter(s => s.state !== 'away').length
     const busy = band.members.filter(s => s.state === 'working' || s.state === 'waiting').length
-    label(band.name, WALL_R * T + 20, band.top * T + 11, '#2b2620', 7)
+    label(band.isCollapsed ? '▸' : '▾', WALL_R * T + 21, band.top * T + 11.5, '#2b2620', 8)
+    label(band.name, WALL_R * T + 32, band.top * T + 11, '#2b2620', 7)
     label(`${present}/${band.members.length} in · ${busy} busy`, COLS * T - 6, band.top * T + 11, '#4a4234', 6, 'right', '500')
+    if (band.isCollapsed) continue
     for (const s of band.members) {
       const desk = layout.desks.get(s.id)
       const x = (desk.c + 1) * T + 10
@@ -868,11 +946,20 @@ function drawWalls() {
   }
 }
 
+let simAt = Date.now()
+function simulate() {
+  const now = Date.now()
+  const dt = (now - simAt) / 1000
+  simAt = now
+  if (!layout) return
+  for (const e of [...workers.values(), ...helpers.values(), manager, dog]) if (e) step(e, dt)
+  behave(now)
+}
+setInterval(simulate, SIM_MS)
+
 function frame() {
   const now = Date.now()
   if (layout) {
-    for (const e of [...workers.values(), ...helpers.values(), manager, dog]) if (e) step(e)
-    behave(now)
     ctx.setTransform(ZOOM, 0, 0, ZOOM, 0, 0)
     rect(0, 0, COLS * T, layout.ROWS * T, '#4b3a2f')
     drawRoomsLeft(now)
@@ -988,8 +1075,17 @@ canvas.addEventListener('click', event => {
       return
     }
   }
+  for (const band of layout.rooms) {
+    if (x >= WALL_R * T && y >= band.top * T && y < (band.top + 1) * T) {
+      toggleRoom(band.id)
+      return
+    }
+  }
   select(null)
 })
+
+// A handle for debugging from the console.
+window.__hq = { get layout() { return layout }, workers, helpers, prefs, findPath, setMode, sessionsOf }
 
 void poll()
 setInterval(poll, 2000)

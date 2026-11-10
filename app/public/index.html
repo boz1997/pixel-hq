@@ -12,6 +12,9 @@
   #top b { color: #f2c037; letter-spacing: 1px; }
   #top .dim { color: #8a8fa6; }
   #top .warn { color: #f5b82e; }
+  #top .modes { margin-left: auto; display: flex; gap: 4px; }
+  #top .modes button { font: inherit; font-size: 12px; padding: 3px 10px; border-radius: 6px; border: 1px solid #3d4258; background: #1f2130; color: #8a8fa6; cursor: pointer; }
+  #top .modes button.on { background: #3d6fd6; border-color: #3d6fd6; color: #fff; }
   #wrap { display: flex; align-items: flex-start; }
   #stage { flex: 1; overflow: auto; padding: 12px; }
   canvas { display: block; image-rendering: pixelated; image-rendering: crisp-edges; width: 100%; max-width: 1536px; margin: 0 auto; background: #4b3a2f; border: 2px solid #2d2a3a; }
@@ -55,6 +58,9 @@
   <span id="counts" class="dim">loading…</span>
   <span id="fresh" class="dim"></span>
   <span id="mode" class="dim"></span>
+  <span class="modes" title="calm: everyone stays at their desk · lively: people move to the library, the studio, the café">
+    <button id="mode-calm">calm</button><button id="mode-lively">lively</button>
+  </span>
 </div>
 <div id="wrap">
   <div id="stage"><canvas id="office" width="768" height="672"></canvas></div>
