@@ -1,0 +1,15 @@
+{
+  "name": "pixel-hq",
+  "version": "0.1.0",
+  "description": "A pixel-art office of every Claude Code session: the viewer app (npx pixel-hq) and the Claude Code mod that feeds it.",
+  "type": "module",
+  "bin": { "pixel-hq": "bin/pixel-hq.js" },
+  "files": ["bin", "app", "api", "hooks", "types", ".claude-plugin/plugin.json", ".claude-plugin/marketplace.json", "README.md", "LICENSE"],
+  "scripts": {
+    "start": "node bin/pixel-hq.js"
+  },
+  "engines": { "node": ">=18" },
+  "repository": "github:boz1997/pixel-hq",
+  "license": "MIT",
+  "author": "Berk Özdoruk"
+}

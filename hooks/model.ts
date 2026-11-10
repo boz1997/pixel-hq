@@ -113,7 +113,10 @@ export function buildRooms(roster: Roster | undefined, lives: Record<string, Liv
   }
 
   const groups = [...(roster?.groups ?? [])].sort((a, b) => a.order - b.order)
-  const rooms = groups.map(g => room(g.id, g.name, 'group', MAX_DESKS, s => s.groupId === g.id && !s.isPinned))
+  // A group with no session in it (the sidebar hides those too) gets no room.
+  const rooms = groups
+    .map(g => room(g.id, g.name, 'group', MAX_DESKS, s => s.groupId === g.id && !s.isPinned))
+    .filter(one => one.desks.length > 0)
   const pinned = room('pinned', 'PINNED', 'pinned', MAX_DESKS, s => s.isPinned)
   if (pinned.desks.length > 0) rooms.push(pinned)
   const known = new Set(groups.map(g => g.id))
@@ -129,6 +132,7 @@ export function verbFor(tool: string): string {
   if (/^(Grep|Glob|ToolSearch|LSP)$/.test(tool)) return 'searching'
   if (tool === 'Bash' || tool === 'Monitor') return 'running'
   if (/^Web/.test(tool)) return 'browsing'
+  if (/artifact|visualize|show_widget|image|video|design|canvas|sketch|3d/i.test(tool)) return 'designing'
   if (/^(Agent|Workflow)$/.test(tool)) return 'delegating'
   if (tool === 'SendMessage') return 'messaging'
   if (/^(TodoWrite|Task)/.test(tool)) return 'planning'

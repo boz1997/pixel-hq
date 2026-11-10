@@ -13,6 +13,9 @@ export type Helper = {
 
 export type Limit = { kind: string; percentUsed: number; resetsAt?: string }
 
+/** One tool call of the session or of one of its subagents (`who`), for the activity log. */
+export type LogEntry = { at: number; tool: string; verb: string; detail: string; who?: string }
+
 /** One session as its own mod instance publishes it to the shared store. */
 export type Live = {
   id: string
@@ -32,6 +35,7 @@ export type Live = {
   context?: number
   limits?: Limit[]
   turns: number
+  log: LogEntry[]
 }
 
 export type RosterGroup = { id: string; name: string; order: number }

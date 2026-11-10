@@ -1,21 +1,15 @@
 # Pixel HQ
 
-A pixel-art office for the Claude Code desktop app, in a pane beside the chat. Every session in your sidebar is a desk, every sidebar group is a room, and Claude is the manager in the corner office.
+A pixel-art office of every Claude Code session. Two ways to look at it:
 
-![The office: Claude in the corner office with the context and usage boards, then rooms of desks, one per session](docs/office.png)
+- **The office app**, in your browser: a living scene. People walk between their desk, the library, the studio and the café; subagents work at the meeting table and bring their results over; the manager does the rounds; there is a cat. One command runs it. It can also mirror itself to your own password-protected Vercel page.
+- **The pane**, inside the Claude Code desktop app: a still picture of the same office beside the chat, redrawn as things happen.
 
-- **Rooms** follow your sidebar: one per custom group, in the sidebar's order, then PINNED and a LOBBY for ungrouped sessions.
-- **Desks** are sessions. The person at a desk works while the session's turn runs: the screen shows code, a terminal, a document or a browser after the tool in use, and a speech bubble says what it is doing. A desk whose session waits for your permission or your answer bounces with a `!`. A finished turn shows a `✓` for a while. A session nobody is in is an empty chair with a coat on it; an idle one has a steaming mug.
-- **Subagents** stand beside their session's desk as small figures, three at most and the rest counted: they hop while they work, turn grey with a `✓` when done, and get a red mark when they fail.
-- **The manager** says how the office is doing ("3 at work", "2 need you", "all quiet"). The CONTEXT board shows how full this session's context window is, the bin beside the desk fills with it, and the USAGE board shows the account's rate-limit windows and when they reset. The windows follow the time of day. There is a cat.
-- **Needs you:** when another session starts waiting for your answer, the session you are looking at shows a toast naming it.
-- **Hover** a desk for its details: the folder, an open pull request, each subagent's task and tool, when it was last active.
-- **Pick** a desk from the list under the office to **Open** that session in the app or send it a **Message**.
-- The desk of the session you are looking at has a gold frame.
+Both are fed by **the mod**, a Claude Code plugin that runs in every session and publishes what that session is doing to a file on your machine. Nothing leaves your computer unless you set up the mirror.
 
-Each session runs its own copy of the mod and publishes its own desk; every copy draws the whole office. Nothing leaves your machine.
+![The office app: the manager's office, the meeting room, the library, the studio and the café on the left; rooms of desks, one per session, on the right](docs/office.png)
 
-## Install
+## 1. Install the mod
 
 At the prompt of a terminal session:
 
@@ -33,23 +27,47 @@ claude plugin install pixel-hq --marketplace boz1997/pixel-hq
 
 In the desktop app, where `/plugin` does not run: click + next to the prompt box, then Plugins, Add marketplace with `boz1997/pixel-hq`, then Add plugin.
 
-The office draws itself in the desktop app (and the VS Code extension and the mobile app); a terminal session shows a text list instead. Every session that should have a desk needs the mod loaded, so install it at the user scope and restart the sessions that were already open.
+Every session that should have a desk needs the mod loaded, so install it at the user scope and restart the sessions that were already open. The pane opens in each session; close it and it stays closed for that session, `/hq` opens it again.
 
-## Use
+## 2. Run the office app
 
-- The pane opens when a session starts. Close it and it stays closed for that session; `/hq` opens it again and prints a one-line status.
-- In a terminal session the office is a text list.
+```
+npx github:boz1997/pixel-hq
+```
+
+(or `node bin/pixel-hq.js` in a clone). It starts at http://localhost:4747 and opens your browser. `--port 5000` picks another port, `--no-open` keeps the browser closed.
+
+What you see:
+
+- **Rooms** follow your sidebar: one per custom group, in the sidebar's order, then PINNED and a LOBBY for ungrouped sessions. Every session has a desk; the gold frame is the one you picked.
+- **People** are sessions. At the desk while the session works (the screen shows code, a terminal, a document after the tool in use, and a speech bubble says what it is doing); in the **library** while it browses the web; in the **studio** while it makes images, pages or designs; at the **café** when it has been idle for a while, chatting; off to the **WC** now and then. A session that waits for your permission or your answer bounces with a `!`; a finished turn shows a `✓`. A session nobody is in has an empty chair with a coat on it. New sessions walk in through the entrance; closed ones walk out.
+- **Subagents** sit at the meeting table while they work, then carry their paper to their session's desk and leave.
+- **The manager** says how the office is doing, keeps the CONTEXT and USAGE boards and a bin that fills with the picked session's context. The windows follow the time of day.
+- **Click** a person or a desk for the session: its state, its subagents, its last twenty tool calls, and a button that opens it in Claude.
+
+## 3. Mirror it on Vercel (optional)
+
+To see the office from another computer or your phone, run your own mirror. It is one page and one function; the state is pushed to it by the app running on your machine, so the mirror only shows what your machine sends.
+
+1. Fork or clone this repository and deploy it: `vercel` in the folder, or the Vercel dashboard with the repository. The project needs no build.
+2. In the Vercel dashboard, open the project's **Storage** tab and create a **Redis (Upstash)** store, connected to the project. That adds `KV_REST_API_URL` and `KV_REST_API_TOKEN` to the project.
+3. Add the environment variable `PIXEL_HQ_PASSWORD` (any password you like) and redeploy.
+4. On your machine, run the app with the mirror and its password:
+
+```
+npx github:boz1997/pixel-hq --push https://your-project.vercel.app --password your-password
+```
+
+The page at `https://your-project.vercel.app` asks for the password once per browser. The app sends the state only when it changed, at most every two seconds; the mirror holds the last state it got.
 
 ## Develop
 
-The mod is three folders: `.claude-plugin/plugin.json`, `hooks/` (the hooks module and the drawing) and `types/` (the state contract).
-
-- `claude plugin validate <folder>` checks the manifest and the hooks module.
-- `tsc -p <folder>` type-checks it once a session has loaded the mod and laid `.claude-plugin/types/` beside it (TypeScript 5.4 or newer).
-- To run it from its folder in every session, name the folder in `CLAUDE_CODE_PLUGIN_DIRS` in the `env` block of `~/.claude/settings.json`; `CLAUDE_CODE_PLUGIN_DIR_WATCH=1` reloads it when a file changes.
+- `hooks/`, `types/` and `.claude-plugin/` are the mod. `claude plugin validate <folder>` checks it; `tsc -p <folder>` type-checks it once a session has loaded it and laid `.claude-plugin/types/` beside it (TypeScript 5.4 or newer). To run the mod from its folder in every session, name the folder in `CLAUDE_CODE_PLUGIN_DIRS` in the `env` block of `~/.claude/settings.json`; `CLAUDE_CODE_PLUGIN_DIR_WATCH=1` reloads it when a file changes.
+- `app/` is the office app: `server.js` reads the mod's store files under `~/.claude/plugins/store/` and serves `public/`, where `office.js` is the whole scene (layout, walking, behaviour, drawing) and `sprites.js` the pixel art. No build step, no dependencies.
+- `api/state.js` and `vercel.json` are the mirror.
 
 ## Notes
 
 - Claude's orange mascot belongs to Anthropic; the people, furniture and rooms are original pixel art.
-- The mod reads only what the desktop app tells it about your sessions and what each session's own copy publishes. It sends nothing anywhere.
+- The mod reads only what the desktop app tells it about your sessions and what each session's own copy publishes. The app reads that from your disk. Only the mirror, if you set one up, sends anything anywhere, and only to your own Vercel project.
 - MIT licensed.

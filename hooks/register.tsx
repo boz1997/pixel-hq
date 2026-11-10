@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import type { DeskState, Helper, Live, Office } from '../types'
+import type { DeskState, Helper, Live, LogEntry, Office } from '../types'
 import { fetchRoster, fetchSelf, forget, publish, readLives, SESSIONS } from './hq'
 import { ago, buildRooms, clip, detailFor, gist, shownState, verbFor } from './model'
 import type { Desk, Room } from './model'
@@ -28,8 +28,18 @@ const EMPTY_ME: Live = {
   detail: '',
   helpers: [],
   turns: 0,
+  log: [],
 }
 const INITIAL: Office = { me: EMPTY_ME, lives: {} }
+
+const LOG_KEPT = 20
+
+/** Keeps one tool call in this session's activity log, which the office viewer reads. */
+const logCall = ($: EngineInterface, tool: string, verb: string, detail: string, who?: string) =>
+  setMe($, (me, now) => {
+    const entry: LogEntry = { at: now, tool, verb, detail, ...(who ? { who } : {}) }
+    return { log: [...(me.log ?? []), entry].slice(-LOG_KEPT) }
+  })
 
 const office = atom({ plugin: 'pixel-hq', key: 'office' } as const, INITIAL, { shape: 'office-1' })
 const isDismissed = atom({ plugin: 'pixel-hq', key: 'isDismissed' } as const, false)
@@ -143,6 +153,7 @@ async function tick($: EngineInterface): Promise<void> {
     try {
       roster = await fetchRoster($, now)
       note = undefined
+      await $.store.set('roster', roster)
       if (rosterAsks % 3 === 1 || current.me.ccdId === `local_${current.me.id}`) await learnSelf($)
     } catch (error) {
       note = `sidebar: ${String(error instanceof Error ? error.message : error).slice(0, 90)}`
@@ -273,14 +284,38 @@ export const register: Register = on => {
     if (next.origin.plugin !== 'engine') return verdict
     if (e.tool_use_id !== undefined && verdict.decision !== 'deny') {
       const tool = String(e.tool)
-      const isAsked = verdict.decision === 'ask' && e.approver === 'person'
       const input = (typeof e.input === 'object' && e.input !== null ? e.input : {}) as Record<string, unknown>
-      if (e.agentId !== undefined) await setHelper($, e.agentId, { verb: isAsked ? 'waiting' : verbFor(tool), detail: detailFor(tool, input), isDone: false })
-      else if (isAsked) await setState($, 'waiting', 'waiting', `OK to ${verbFor(tool) === 'working' ? 'use' : verbFor(tool).replace(/ing$/, '')} ${detailFor(tool, input) || tool}`.slice(0, 40), tool)
-      else await setState($, 'working', verbFor(tool), detailFor(tool, input), tool)
+      if (e.agentId !== undefined) {
+        await setHelper($, e.agentId, { verb: verbFor(tool), detail: detailFor(tool, input), isDone: false })
+        const who = (await read($, office)).me.helpers.find(h => h.id === e.agentId)?.label
+        await logCall($, tool, verbFor(tool), detailFor(tool, input), who ?? e.agentId.slice(0, 8))
+      } else {
+        await logCall($, tool, verbFor(tool), detailFor(tool, input))
+        await setState($, 'working', verbFor(tool), detailFor(tool, input), tool)
+      }
     }
 
     return verdict
+  })
+
+  // The dialog that asks the person is the wait; the call that follows their answer ends it.
+  on('classic.PermissionRequest', async ($, e, next) => {
+    if (!e.agent_id) {
+      const tool = String(e.tool_name)
+      const input = (typeof e.tool_input === 'object' && e.tool_input !== null ? e.tool_input : {}) as Record<string, unknown>
+      await setState($, 'waiting', 'waiting', `OK to ${verbFor(tool) === 'working' ? 'use' : verbFor(tool).replace(/ing$/, '')} ${detailFor(tool, input) || tool}`.slice(0, 40), tool)
+    }
+
+    return next(e)
+  })
+
+  on('tool.call', { tool: /^(?!AskUserQuestion$)/ }, async ($, e, next) => {
+    if (next.origin.plugin === 'engine' && e.agentId === undefined && (await read($, office)).me.state === 'waiting') {
+      const tool = String(e.tool)
+      await setState($, 'working', verbFor(tool), detailFor(tool, e as unknown as Record<string, unknown>), tool)
+    }
+
+    return next(e)
   })
 
   on('tool.call', { tool: 'AskUserQuestion' }, async ($, e, next) => {

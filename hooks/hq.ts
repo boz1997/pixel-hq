@@ -106,7 +106,7 @@ export async function readLives($: EngineInterface, now: number, meId: string): 
       await $.store.delete(key)
       continue
     }
-    lives[value.id] = value
+    lives[value.id] = { ...value, log: Array.isArray(value.log) ? value.log : [] }
   }
   return lives
 }
