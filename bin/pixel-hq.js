@@ -8,23 +8,23 @@ const flag = name => {
 }
 
 if (args.includes('--help') || args.includes('-h')) {
-  console.log(`pixel-hq: the office of your Claude Code sessions, in your browser.
+  console.log(`pixel-hq: the office of your Claude Code sessions, in your browser and on your phone.
 
-  pixel-hq [--port 4747] [--no-open] [--push https://your-app.vercel.app --password secret]
+  pixel-hq [--port 2323] [--no-open] [--demo] [--password secret] [--local-only]
 
-  --port      the local port (default 4747)
-  --no-open   do not open the browser
-  --demo      show a made-up office instead of your sessions
-  --push      also send the office's state to your own Vercel mirror, every two seconds
-  --password  the mirror's password (PIXEL_HQ_PASSWORD on Vercel); also read from the environment
+  --port        the port (default 2323)
+  --no-open     do not open the browser
+  --demo        show a made-up office instead of your sessions
+  --password    ask for this password before showing the office (also read from PIXEL_HQ_PASSWORD)
+  --local-only  listen on this computer only, not on the Wi-Fi
 `)
   process.exit(0)
 }
 
 startServer({
-  port: Number(flag('--port') ?? process.env.PORT ?? 4747),
+  port: Number(flag('--port') ?? process.env.PORT ?? 2323),
   open: !args.includes('--no-open'),
   demo: args.includes('--demo'),
-  push: flag('--push') ?? process.env.PIXEL_HQ_PUSH,
   password: flag('--password') ?? process.env.PIXEL_HQ_PASSWORD,
+  host: args.includes('--local-only') ? '127.0.0.1' : '0.0.0.0',
 })

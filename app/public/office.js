@@ -904,7 +904,7 @@ function onData() {
   const working = sessions.filter(s => s.state === 'working').length
   const waiting = sessions.filter(s => s.state === 'waiting').length
   document.getElementById('counts').textContent = `${sessions.length} desks · ${present} in · ${working} working · ${waiting} waiting for you`
-  document.getElementById('mode').textContent = data.isDemo ? 'demo office' : isRemote ? 'mirror' : `${data.sources ?? 0} store file${data.sources === 1 ? '' : 's'}`
+  document.getElementById('mode').textContent = data.isDemo ? 'demo office' : `${data.sources ?? 0} store file${data.sources === 1 ? '' : 's'}${isRemote ? ' · locked' : ''}`
   if (selected) renderPanel()
 }
 

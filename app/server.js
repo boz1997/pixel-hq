@@ -9,7 +9,6 @@ import { demoState } from './demo.js'
 
 const PUBLIC = path.join(path.dirname(fileURLToPath(import.meta.url)), 'public')
 const STORE_DIR = path.join(os.homedir(), '.claude', 'plugins', 'store')
-const PUSH_MS = 2000
 
 const TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -80,40 +79,26 @@ function openBrowser(url) {
   exec(command, () => undefined)
 }
 
-/** Sends the state to a Vercel mirror whenever it changed. */
-function startPush(push, password, demo) {
-  const target = `${push.replace(/\/$/, '')}/api/state`
-  let last = ''
-  let isFailing = false
-  const tick = async () => {
-    const state = demo ? demoState() : readState()
-    const body = JSON.stringify(state)
-    const signature = JSON.stringify({ roster: state.roster, lives: state.lives })
-    if (signature === last) return
-    try {
-      const res = await fetch(target, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', 'x-pixel-hq-password': password ?? '' },
-        body,
-      })
-      if (!res.ok) throw new Error(`${res.status} ${(await res.text()).slice(0, 120)}`)
-      last = signature
-      if (isFailing) console.log(`push: back to normal`)
-      isFailing = false
-    } catch (error) {
-      if (!isFailing) console.log(`push to ${target} failed: ${error.message}`)
-      isFailing = true
+/** The addresses another device on the same network reaches this computer by. */
+function networkAddresses() {
+  const out = []
+  for (const [name, list] of Object.entries(os.networkInterfaces())) {
+    for (const one of list ?? []) {
+      if (one.family === 'IPv4' && !one.internal) out.push({ name, address: one.address })
     }
   }
-  setInterval(tick, PUSH_MS)
-  void tick()
+  return out
 }
 
-export function startServer({ port = 4747, open = true, push, password, demo = false } = {}) {
+export function startServer({ port = 2323, host = '0.0.0.0', open = true, password, demo = false } = {}) {
   const state = () => (demo ? demoState() : readState())
   const server = http.createServer((req, res) => {
     const url = new URL(req.url, 'http://localhost')
     if (url.pathname === '/api/state') {
+      if (password && req.headers['x-pixel-hq-password'] !== password) {
+        send(res, 401, TYPES['.json'], JSON.stringify({ error: 'wrong password' }))
+        return
+      }
       send(res, 200, TYPES['.json'], JSON.stringify(state()))
       return
     }
@@ -123,17 +108,19 @@ export function startServer({ port = 4747, open = true, push, password, demo = f
     }
     serveStatic(req, res)
   })
-  server.listen(port, '127.0.0.1', () => {
-    const url = `http://localhost:${port}`
+  server.listen(port, host, () => {
+    const local = `http://localhost:${port}`
     const files = storeFiles()
-    console.log(`Pixel HQ at ${url}`)
+    console.log(`Pixel HQ at ${local}`)
+    if (host !== '127.0.0.1') {
+      const hostname = os.hostname().replace(/\.local$/, '')
+      console.log(`on your phone, on the same Wi-Fi: http://${hostname}.local:${port}`)
+      for (const { address } of networkAddresses()) console.log(`                               or http://${address}:${port}`)
+      if (!password) console.log('anyone on this network can open it; add --password to ask for one')
+    }
     if (demo) console.log('showing the demo office; drop --demo to see your own sessions')
     else console.log(files.length > 0 ? `reading ${files.length} store file${files.length === 1 ? '' : 's'} under ${STORE_DIR}` : `no store file under ${STORE_DIR} yet: install the mod and open a session (or try --demo)`)
-    if (push) {
-      console.log(`mirroring to ${push}`)
-      startPush(push, password, demo)
-    }
-    if (open) openBrowser(url)
+    if (open) openBrowser(local)
   })
   server.on('error', error => {
     console.error(error.code === 'EADDRINUSE' ? `port ${port} is taken; try --port ${port + 1}` : error.message)

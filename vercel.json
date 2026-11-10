@@ -1,6 +1,0 @@
-{
-  "framework": null,
-  "outputDirectory": "app/public",
-  "installCommand": "echo no install needed",
-  "buildCommand": "echo static"
-}

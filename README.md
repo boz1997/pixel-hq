@@ -2,10 +2,10 @@
 
 A pixel-art office of every Claude Code session. Two ways to look at it:
 
-- **The office app**, in your browser: a living scene. People walk between their desk, the library, the studio and the café; subagents work at the meeting table and bring their results over; the manager does the rounds; there is a cat. One command runs it. It can also mirror itself to your own password-protected Vercel page.
+- **The office app**, in your browser, and on your phone over the same Wi-Fi: a living scene. People walk between their desk, the library, the studio and the café; subagents work at the meeting table and bring their results over; the manager does the rounds; there is a cat. One command runs it.
 - **The pane**, inside the Claude Code desktop app: a still picture of the same office beside the chat, redrawn as things happen.
 
-Both are fed by **the mod**, a Claude Code plugin that runs in every session and publishes what that session is doing to a file on your machine. Nothing leaves your computer unless you set up the mirror.
+Both are fed by **the mod**, a Claude Code plugin that runs in every session and publishes what that session is doing to a file on your machine. Nothing leaves your computer.
 
 ![The office app: the manager's office, the meeting room, the library, the studio and the café on the left; rooms of desks, one per session, on the right](docs/office.png)
 
@@ -35,7 +35,11 @@ Every session that should have a desk needs the mod loaded, so install it at the
 npx github:boz1997/pixel-hq
 ```
 
-(or `node bin/pixel-hq.js` in a clone). It starts at http://localhost:4747 and opens your browser. `--port 5000` picks another port, `--no-open` keeps the browser closed.
+(or `node bin/pixel-hq.js` in a clone). It starts at http://localhost:2323, opens your browser, and prints the address your phone can open on the same Wi-Fi, such as `http://your-mac.local:2323` or `http://192.168.1.20:2323`. Keep it running; the page updates itself every two seconds.
+
+- `--port 5000` picks another port, `--no-open` keeps the browser closed.
+- `--password secret` asks for the password before showing the office; without one, anyone on your network who finds the port can look. `--local-only` listens on this computer alone.
+- `--demo` shows a made-up office, so you can see the app before installing the mod.
 
 What you see:
 
@@ -45,29 +49,13 @@ What you see:
 - **The manager** says how the office is doing, keeps the CONTEXT and USAGE boards and a bin that fills with the picked session's context. The windows follow the time of day.
 - **Click** a person or a desk for the session: its state, its subagents, its last twenty tool calls, and a button that opens it in Claude.
 
-## 3. Mirror it on Vercel (optional)
-
-To see the office from another computer or your phone, run your own mirror. It is one page and one function; the state is pushed to it by the app running on your machine, so the mirror only shows what your machine sends.
-
-1. Fork or clone this repository and deploy it: `vercel` in the folder, or the Vercel dashboard with the repository. The project needs no build.
-2. In the Vercel dashboard, open the project's **Storage** tab and create a **Redis (Upstash)** store, connected to the project. That adds `KV_REST_API_URL` and `KV_REST_API_TOKEN` to the project.
-3. Add the environment variable `PIXEL_HQ_PASSWORD` (any password you like) and redeploy.
-4. On your machine, run the app with the mirror and its password:
-
-```
-npx github:boz1997/pixel-hq --push https://your-project.vercel.app --password your-password
-```
-
-The page at `https://your-project.vercel.app` asks for the password once per browser. The app sends the state only when it changed, at most every two seconds; the mirror holds the last state it got.
-
 ## Develop
 
 - `hooks/`, `types/` and `.claude-plugin/` are the mod. `claude plugin validate <folder>` checks it; `tsc -p <folder>` type-checks it once a session has loaded it and laid `.claude-plugin/types/` beside it (TypeScript 5.4 or newer). To run the mod from its folder in every session, name the folder in `CLAUDE_CODE_PLUGIN_DIRS` in the `env` block of `~/.claude/settings.json`; `CLAUDE_CODE_PLUGIN_DIR_WATCH=1` reloads it when a file changes.
-- `app/` is the office app: `server.js` reads the mod's store files under `~/.claude/plugins/store/` and serves `public/`, where `office.js` is the whole scene (layout, walking, behaviour, drawing) and `sprites.js` the pixel art. No build step, no dependencies.
-- `api/state.js` and `vercel.json` are the mirror.
+- `app/` is the office app: `server.js` reads the mod's store files under `~/.claude/plugins/store/` and serves `public/`, where `office.js` is the whole scene (layout, walking, behaviour, drawing) and `sprites.js` the pixel art; `demo.js` is the made-up office. No build step, no dependencies.
 
 ## Notes
 
 - Claude's orange mascot belongs to Anthropic; the people, furniture and rooms are original pixel art.
-- The mod reads only what the desktop app tells it about your sessions and what each session's own copy publishes. The app reads that from your disk. Only the mirror, if you set one up, sends anything anywhere, and only to your own Vercel project.
+- The mod reads only what the desktop app tells it about your sessions and what each session's own copy publishes. The app reads that from your disk and serves it on your own network. Nothing is sent anywhere else.
 - MIT licensed.
