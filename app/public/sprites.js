@@ -7,7 +7,7 @@ export const CLAUDE_DARK = '#b85f42'
 
 export const BASE_PALETTE = {
   k: INK, e: INK, m: '#b5524f', w: '#ffffff', p: '#3d4258',
-  G: '#f2c037', R: '#e0484d', o: CLAUDE, O: CLAUDE_DARK, L: '#2e9d57',
+  G: '#f2c037', R: '#e0484d', o: CLAUDE, O: CLAUDE_DARK, L: '#2e9d57', y: '#e8c547', b: '#3d6fd6',
 }
 
 export const SHIRTS = ['#4f7cc9', '#8a6fd1', '#3f9a68', '#e08a2b', '#c95a4a', '#2fa3a0', '#d46a9a', '#c9a227', '#6b7bd6', '#7a9a3a', '#e07a5f', '#5c8d89']
@@ -15,7 +15,7 @@ export const HAIRS = ['#2b2420', '#6b4a2f', '#1e1e24', '#c9a25a', '#a5492e', '#8
 export const SKINS = ['#f3cfa6', '#e6b48c', '#c98f62', '#8f5d3d', '#f7dcc0']
 export const HAT_COLORS = ['#e0484d', '#3f6fd8', '#2a2a33', '#6cc24a', '#f2c037', '#8e6ad8']
 
-/** A person, 10 wide and 15 tall: the head and body; the legs come from LEGS by frame. */
+/** A person, 10 wide: the head and body; the legs come from LEGS by pose. */
 export const PERSON_TOP = [
   '..hhhhhh..',
   '.hhhhhhhh.',
@@ -33,7 +33,9 @@ export const PERSON_TOP = [
 export const LEGS = {
   stand: ['..pppppp..', '..pp..pp..', '..kk..kk..'],
   walk1: ['..pppppp..', '.pp....pp.', '.kk....kk.'],
-  walk2: ['..pppppp..', '...pppp...', '...kkkk...'],
+  walk2: ['..pppppp..', '..pp..pp..', '..kk..kk..'],
+  walk3: ['..pppppp..', '...pppp...', '...kkkk...'],
+  walk4: ['..pppppp..', '..pp..pp..', '..kk..kk..'],
   sit: ['.pppppppp.', '.pp....pp.', '.kk....kk.'],
 }
 export const HAIR_STYLES = [
@@ -42,19 +44,29 @@ export const HAIR_STYLES = [
   ['..hhhhhh..', '.hhhhhhhh.', 'hhhhhhhhhh', 'hhsssssshh'],
   ['..h.hh.h..', '.hhhhhhhh.', '.hhhhhhhh.', '.ssssssss.'],
   ['..........', '...ssss...', '.ssssssss.', '.ssssssss.'],
+  ['..hhhhhh..', '.hhhhhhhh.', 'hhhhhhhhhh', 'hssssssshh'],
+  ['....hh....', '..hhhhhh..', '.hhhhhhhh.', '.ssssssss.'],
+  ['..hhhhhh..', '.hhhhhhhh.', '.hhhhhhhh.', '.hsssssss.'],
 ]
+/** Two rows of beard over the mouth and chin. */
+export const BEARD = ['..hhhhhh..', '...hhhh...']
 export const HATS = {
   cap: { rows: ['..CCCCCC..', '.CCCCCCCC.', 'CCCCCCCCCC'], dy: -1 },
   beanie: { rows: ['....ww....', '..CCCCCC..', '.CCCCCCCC.', 'CwCwCwCwCw'], dy: -2 },
   phones: { rows: ['..kkkkkk..', '.k......k.', 'kk......kk'], dy: -1 },
   bow: { rows: ['.......RR.', '......RRR.', '.......RR.'], dy: -1 },
   glasses: { rows: ['kkkk..kkkk', 'k..kkkk..k', 'kkkk..kkkk'], dy: 4 },
+  tophat: { rows: ['..kkkkkk..', '..kkkkkk..', '..kkkkkk..', 'kkkkkkkkkk'], dy: -3 },
+  party: { rows: ['....C.....', '...CCC....', '..CCCCC...'], dy: -3 },
+  flower: { rows: ['.......RR.', '.......RR.'], dy: 0 },
 }
-export const HAT_NAMES = ['none', 'none', 'cap', 'beanie', 'phones', 'bow', 'glasses', 'none']
+export const HAT_NAMES = ['none', 'none', 'cap', 'beanie', 'phones', 'bow', 'glasses', 'none', 'tophat', 'party', 'flower', 'none']
 
-/** A helper, 6 wide and 8 tall: a subagent. */
+/** A helper, 6 wide: a subagent. */
 export const MINI_TOP = ['.hhhh.', 'hhhhhh', '.sese.', '.ssss.', '.cccc.', 'cccccc']
-export const MINI_LEGS = { stand: ['.pppp.', '.k..k.'], walk1: ['.pppp.', 'k....k'], walk2: ['.pppp.', '..kk..'], sit: ['.pppp.', '.k..k.'] }
+export const MINI_LEGS = {
+  stand: ['.pppp.', '.k..k.'], walk1: ['.pppp.', 'k....k'], walk2: ['.pppp.', '.k..k.'], walk3: ['.pppp.', '..kk..'], walk4: ['.pppp.', '.k..k.'], sit: ['.pppp.', '.k..k.'],
+}
 
 /** The manager: an orange block with two eye slits and four legs, 16 wide and 11 tall. */
 export const MASCOT = [
@@ -85,7 +97,7 @@ export const MASCOT_WALK = [
 ]
 export const CROWN = ['G.G..G.G', 'GGGGGGGG', 'GGRGGRGG']
 
-/** An empty chair with a coat over its back, for a desk nobody is at. */
+/** A chair; `c` is the coat over its back. */
 export const CHAIR = [
   '..kkkkkk..',
   '.kccBBBBk.',
@@ -99,8 +111,9 @@ export const CHAIR = [
   '..k....k..',
 ]
 export const CHAIR_PALETTE = { k: INK, B: '#4b5060', S: '#5f6470', c: '#c47a3d' }
+export const CHAIR_PLAIN_PALETTE = { k: INK, B: '#4b5060', S: '#5f6470', c: '#4b5060' }
 
-/** A desk seen from the front: two shelves of screens, a keyboard, papers, a mug. 44 x 26. */
+/** A desk seen from the front: a screen on a shelf, a keyboard, papers, a mug. 44 x 26. */
 export const DESK = [
   '.............kkkkkkkkkkkkkkkkkk.............',
   '.............kkkkkkkkkkkkkkkkkk.............',
@@ -133,11 +146,23 @@ export const DESK_PALETTE = { k: INK, u: '#5a5f73', t: '#b9844f', T: '#8d5f36', 
 
 export const PLANT = ['...gg...', '..gggg..', '.gGgggGg', '..gggg..', '...bb...', '..bbbb..', '..bbbb..']
 export const PLANT_PALETTE = { g: '#4f9a55', G: '#7bd17f', b: '#b5653d' }
+export const PLANT_SMALL = ['.gg.', 'gGgg', '.gg.', '.bb.', 'bbbb']
+export const LAMP = ['.yyyy.', 'yyyyyy', '..kk..', '..kk..', '..kk..', '.kkkk.']
+export const DUCK = ['..yy.', '.yyyy', 'yyyyo', '.yyy.']
+export const DUCK_PALETTE = { y: '#f2d16b', o: '#e08a2b' }
+export const PHOTO = ['wwwww', 'wbbbw', 'wbgbw', 'wwwww']
+export const PHOTO_PALETTE = { w: '#f4f5f8', b: '#8fc9ea', g: '#4f9a55' }
+export const MONITOR2 = ['kkkkkkkkkk', 'kssssssssk', 'kssssssssk', 'kssssssssk', 'kkkkkkkkkk', '....kk....', '..kkkkkk..']
+export const MONITOR2_PALETTE = { k: INK, s: '#1e2233' }
+export const BOOKS = ['rbg', 'rbg', 'rbg']
+export const BOOKS_PALETTE = { r: '#c95a4a', b: '#4f7cc9', g: '#e0b84a' }
 
-/** A black labrador, 14 wide and 7 tall, facing right: two frames of trotting. */
+/** A black labrador, 14 wide and 7 tall, facing right: four frames of trotting. */
 export const DOG = [
   ['............d.', 'd.........dddd', 'dd.ddddddddDdn', '.ddddddddddrdd', '.dddddddddddd.', '..dd....dd....', '..dd....dd....'],
   ['............d.', 'd.........dddd', 'dd.ddddddddDdn', '.ddddddddddrdd', '.dddddddddddd.', '.dd......dd...', 'dd........dd..'],
+  ['............d.', 'd.........dddd', 'dd.ddddddddDdn', '.ddddddddddrdd', '.dddddddddddd.', '..dd....dd....', '..dd....dd....'],
+  ['............d.', 'd.........dddd', 'dd.ddddddddDdn', '.ddddddddddrdd', '.dddddddddddd.', '...dd..dd.....', '....dddd......'],
 ]
 export const DOG_PALETTE = { d: '#1b1b1f', D: '#f0e6c8', n: '#4a4a52', r: '#e0484d' }
 
@@ -146,7 +171,12 @@ export const PAPER = ['wwwww', 'wggww', 'wgggw', 'wggww', 'wwwww']
 export const PAPER_PALETTE = { w: '#f4f5f8', g: '#9aa0b5' }
 export const MUG = ['mmmm.', 'mwwmm', 'mwwmm', 'mmmm.']
 export const MUG_PALETTE = { m: '#efe9de', w: '#8b5a2b' }
-export const BOOK = ['bbb', 'bwb', 'bbb']
+export const ESPRESSO = ['.kkkkkkkk.', 'kssssssssk', 'kskkkkkksk', 'kssssssssk', 'kkkkkkkkkk', '.k.mm..m.k', '.k.mm..m.k', 'kkkkkkkkkk']
+export const ESPRESSO_PALETTE = { k: '#2d3340', s: '#8a8fa6', m: '#efe9de' }
+export const PASTRY = ['.ppp.', 'pPpPp', 'ppppp']
+export const PASTRY_PALETTE = { p: '#c9a26b', P: '#8b5a2b' }
+export const PHONE = ['kkk', 'kbk', 'kbk', 'kkk']
+export const PHONE_PALETTE = { k: INK, b: '#8fc9ea' }
 
 const cache = new Map()
 
@@ -187,6 +217,7 @@ export function lookOf(seed) {
     style: (seed >>> 12) % HAIR_STYLES.length,
     hat: HAT_NAMES[(seed >>> 16) % HAT_NAMES.length],
     hatColor: HAT_COLORS[(seed >>> 20) % HAT_COLORS.length],
+    beard: (seed >>> 24) % 5 === 0,
   }
 }
 
@@ -202,6 +233,7 @@ export function person(look, pose = 'stand') {
   canvas.height = 18
   const ctx = canvas.getContext('2d')
   ctx.drawImage(raster(rows, palette), 0, 3)
+  if (look.beard) ctx.drawImage(raster(BEARD, palette), 0, 3 + 6)
   const hat = HATS[look.hat]
   if (hat) ctx.drawImage(raster(hat.rows, palette), 0, 3 + hat.dy)
   cache.set(key, canvas)

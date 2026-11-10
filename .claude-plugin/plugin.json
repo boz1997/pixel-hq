@@ -1,11 +1,22 @@
 {
   "name": "pixel-hq",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "A pixel-art office of every Claude Code session in the desktop app: rooms per sidebar group, a desk per session, Claude as the manager, live states.",
-  "author": { "name": "Berk Özdoruk", "url": "https://github.com/boz1997" },
+  "author": {
+    "name": "Berk Özdoruk",
+    "url": "https://github.com/boz1997"
+  },
   "homepage": "https://github.com/boz1997/pixel-hq",
   "repository": "https://github.com/boz1997/pixel-hq",
   "license": "MIT",
-  "keywords": ["pixel-art", "office", "sessions", "subagents", "visualization", "mod", "desktop"],
+  "keywords": [
+    "pixel-art",
+    "office",
+    "sessions",
+    "subagents",
+    "visualization",
+    "mod",
+    "desktop"
+  ],
   "types": "./types/index.d.ts"
 }

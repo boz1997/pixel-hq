@@ -48,12 +48,6 @@ const baseName = (path: string): string => path.split('/').filter(Boolean).pop()
 
 const openPane = ($: EngineInterface) => $.ui.open({ id: PANE, title: 'Pixel HQ' })
 
-/** Opens the pane unasked, unless the person closed it; a refusal is fine. */
-async function offerPane($: EngineInterface): Promise<void> {
-  if (await read($, isDismissed)) return
-  await openPane($).catch(() => undefined)
-}
-
 /** Changes this session's desk and publishes it; a change that changes nothing writes nothing. */
 async function setMe($: EngineInterface, change: (me: Live, now: number) => Partial<Live>): Promise<void> {
   const now = await $.clock.now()
@@ -225,7 +219,6 @@ export const register: Register = on => {
       me: { ...EMPTY_ME, ...value.me, id, ccdId: value.me.ccdId || `local_${id}`, cwd, title: value.me.title || baseName(cwd), at: now, since: now, state: 'idle' as DeskState, verb: 'idle', detail: '', tool: undefined },
     }))
     await publish($, (await read($, office)).me)
-    void offerPane($)
     $.clock.every(TICK_MS, () => void tick($).catch(error => $.ui.log(`pixel-hq tick: ${String(error)}`, { to: 'debug' })))
     const started = await next(e)
     void learnSelf($)

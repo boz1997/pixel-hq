@@ -1,8 +1,10 @@
 // Pixel HQ: the office of every Claude Code session, as a living scene.
 // Data comes from /api/state (what each session's mod published); everything else is here.
 import {
-  BASE_PALETTE, CHAIR, CHAIR_PALETTE, CHECK, DESK, DESK_PALETTE, DOG, DOG_PALETTE, INK, MUG, MUG_PALETTE,
-  PAPER, PAPER_PALETTE, PLANT, PLANT_PALETTE, hash, lookOf, mascot, mini, person, raster,
+  BASE_PALETTE, BOOKS, BOOKS_PALETTE, CHAIR, CHAIR_PALETTE, CHAIR_PLAIN_PALETTE, CHECK, DESK, DESK_PALETTE, DOG,
+  DOG_PALETTE, DUCK, DUCK_PALETTE, ESPRESSO, ESPRESSO_PALETTE, INK, LAMP, MONITOR2, MONITOR2_PALETTE, MUG, MUG_PALETTE,
+  PAPER, PAPER_PALETTE, PASTRY, PASTRY_PALETTE, PHONE, PHONE_PALETTE, PHOTO, PHOTO_PALETTE, PLANT, PLANT_PALETTE,
+  PLANT_SMALL, hash, lookOf, mascot, mini, person, raster,
 } from './sprites.js'
 
 const T = 16
@@ -19,18 +21,19 @@ const LOBBY_CAP = 10
 const STALE_MS = 75_000
 const DONE_MS = 90_000
 const IDLE_TO_CAFE_MS = 25_000
+const SLEEPY_MS = 180_000
 const WC_MS = 15_000
 const DELIVER_MS = 2_500
 const SPEED = 90 // px per second
 const SIM_MS = 40
 
 const ROOMS_LEFT = {
-  office: { top: 0, h: 10, name: 'MANAGER', tint: '#e9dcc0' },
-  meeting: { top: 10, h: 7, name: 'MEETING', tint: '#d9d4e4' },
-  library: { top: 17, h: 7, name: 'LIBRARY', tint: '#dcd3c0' },
-  studio: { top: 24, h: 7, name: 'STUDIO', tint: '#e2d2d8' },
-  cafe: { top: 31, h: 7, name: 'CAFÉ', tint: '#d6dccb' },
-  wc: { top: 38, h: 4, name: 'WC', tint: '#cfd8e3' },
+  office: { top: 0, h: 10, name: 'MANAGER', tint: '#e9dcc0', floor: 'wood' },
+  meeting: { top: 10, h: 7, name: 'MEETING', tint: '#d9d4e4', floor: 'carpet' },
+  library: { top: 17, h: 7, name: 'LIBRARY', tint: '#dcd3c0', floor: 'wood' },
+  studio: { top: 24, h: 7, name: 'STUDIO', tint: '#e2d2d8', floor: 'wood' },
+  cafe: { top: 31, h: 7, name: 'CAFÉ', tint: '#d6dccb', floor: 'checker' },
+  wc: { top: 38, h: 4, name: 'WC', tint: '#cfd8e3', floor: 'tile' },
 }
 const LEFT_H = 42
 
@@ -54,7 +57,12 @@ const FURNITURE = [
 ]
 const ROOM_TINTS = ['#dcd3c0', '#cfd8e3', '#d6dccb', '#e2d2d8', '#d9d4e4', '#d4dedd']
 const DOTS = { working: '#3ecf6e', waiting: '#f5b82e', idle: '#8fb4e8', done: '#2e9d57', failed: '#e5534b', away: '#9aa0b5' }
-const CHAT = ['☕', 'so, weekends?', 'did you see the PR?', '…', 'tea?', 'ha!', 'one more deploy', 'who moved my mug', 'brb']
+const CHAT = ['☕', 'so, weekends?', 'did you see the PR?', '…', 'tea?', 'ha!', 'one more deploy', 'who moved my mug', 'brb', 'lunch?']
+const POSTERS = [
+  { title: 'SHIP IT', color: '#4f7cc9' }, { title: 'FOCUS', color: '#3f9a68' }, { title: 'TEA TIME', color: '#e08a2b' },
+  { title: 'NO BUGS', color: '#c95a4a' }, { title: 'DEPLOY', color: '#8a6fd1' }, { title: 'READ ME', color: '#2fa3a0' },
+]
+const CONFETTI = ['#e0484d', '#f2c037', '#3ecf6e', '#3d6fd6', '#d46a9a', '#ffffff']
 
 function range(a, b) {
   const out = []
@@ -73,11 +81,11 @@ function shownState(live, now) {
   return live.state
 }
 
-// ------------------------------------------------------------------ data
+// ------------------------------------------------------------------ what this browser chose
 
 const password = { value: sessionStorage.getItem('pixel-hq-password') ?? '' }
 
-/** What this browser chose: a calm office (everyone at their desk) or a lively one, and which rooms are folded. */
+/** A calm office (everyone at their desk) or a lively one, and which rooms are folded. */
 const prefs = {
   mode: localStorage.getItem('pixel-hq-mode') === 'calm' ? 'calm' : 'lively',
   collapsed: new Set(JSON.parse(localStorage.getItem('pixel-hq-collapsed') ?? '[]')),
@@ -106,9 +114,12 @@ function toggleRoom(id) {
 document.getElementById('mode-calm').addEventListener('click', () => setMode('calm'))
 document.getElementById('mode-lively').addEventListener('click', () => setMode('lively'))
 document.getElementById(prefs.mode === 'calm' ? 'mode-calm' : 'mode-lively').classList.add('on')
+
+// ------------------------------------------------------------------ data
+
 let data = { at: 0, roster: null, lives: {} }
 let fetchedAt = 0
-let isRemote = false
+let isLocked = false
 
 async function poll() {
   try {
@@ -129,7 +140,7 @@ async function poll() {
 
 function gate(isOpen) {
   document.getElementById('gate').classList.toggle('open', isOpen)
-  isRemote = isRemote || isOpen
+  isLocked = isLocked || isOpen
 }
 document.getElementById('gate-form').addEventListener('submit', event => {
   event.preventDefault()
@@ -207,7 +218,7 @@ function buildLayout(sessions) {
   let top = 0
   const bands = rooms.map((room, i) => {
     const isCollapsed = prefs.collapsed.has(room.id)
-    const band = { ...room, top, isCollapsed, h: isCollapsed ? 1 : 1 + room.rows * DESK_H + 1, tint: ROOM_TINTS[i % ROOM_TINTS.length] }
+    const band = { ...room, top, isCollapsed, h: isCollapsed ? 1 : 1 + room.rows * DESK_H + 1, tint: ROOM_TINTS[i % ROOM_TINTS.length], poster: POSTERS[i % POSTERS.length] }
     top += band.h
     return band
   })
@@ -216,7 +227,6 @@ function buildLayout(sessions) {
   const block = (c, r) => {
     if (r >= 0 && r < ROWS && c >= 0 && c < COLS) blocked[r][c] = 1
   }
-  // The left rooms: their walls, the doors in them, and what stands in them.
   for (const room of Object.values(ROOMS_LEFT)) {
     const door = room.top + Math.floor(room.h / 2)
     for (let r = room.top; r < room.top + room.h; r++) if (r !== door) block(WALL_L, r)
@@ -224,7 +234,6 @@ function buildLayout(sessions) {
   }
   for (let r = LEFT_H; r < ROWS; r++) for (let c = 0; c <= WALL_L; c++) block(c, r)
   for (const [c, r] of FURNITURE) block(c, r)
-  // The right bands: a wall with one door each, a header row, the desks.
   const desks = new Map()
   for (const band of bands) {
     for (let c = WALL_R; c < COLS; c++) block(c, band.top)
@@ -316,6 +325,9 @@ const workers = new Map()
 const helpers = new Map()
 const delivered = new Set()
 const everSeen = new Set()
+const lastState = new Map()
+const lastPr = new Map()
+const particles = []
 let manager = null
 let dog = null
 let selected = null
@@ -325,7 +337,7 @@ const centerOf = ([c, r]) => ({ x: c * T + T / 2, y: r * T + T / 2 })
 
 function spawn(kind, at, extra) {
   const { x, y } = centerOf(at)
-  return { kind, x, y, tile: at, path: [], dest: null, seat: null, frame: 0, dir: 1, hidden: false, bubble: null, ...extra }
+  return { kind, x, y, tile: at, path: [], dest: null, seat: null, frame: 0, dir: 1, hidden: false, bubble: null, pose: null, ...extra }
 }
 
 function walkTo(entity, tile) {
@@ -422,6 +434,17 @@ function goTo(entity, zone, ownerKey) {
   } else walkTo(entity, tile)
 }
 
+function burst(x, y, kind) {
+  const n = kind === 'confetti' ? 26 : 14
+  for (let i = 0; i < n; i++) {
+    particles.push(
+      kind === 'confetti'
+        ? { x, y, vx: rnd(-50, 50), vy: rnd(-130, -50), g: 170, color: pick(CONFETTI), life: rnd(1.0, 1.7), age: 0, size: 2 }
+        : { x: x + rnd(-4, 4), y, vx: rnd(-8, 8), vy: rnd(-28, -12), g: -6, color: pick(['#e5534b', '#8a8a8a', '#5c5c5c', '#c0392b']), life: rnd(1.2, 2.0), age: 0, size: rnd(2, 4) },
+    )
+  }
+}
+
 function syncEntities(sessions) {
   const now = Date.now()
   const seen = new Set()
@@ -441,10 +464,24 @@ function syncEntities(sessions) {
       continue
     }
     if (!w && s.state !== 'away') {
-      w = spawn('worker', layout.entrance, { id: s.id, session: s, look: lookOf(hash(s.id)), nextTrip: now + rnd(90_000, 240_000), wcDone: true, sayAt: now + rnd(3000, 15000), placeDirectly: everSeen.has(s.id) })
+      w = spawn('worker', layout.entrance, { id: s.id, session: s, look: lookOf(hash(s.id)), nextTrip: now + rnd(90_000, 240_000), wcDone: true, sayAt: now + rnd(3000, 15000), nextPose: now + rnd(6000, 14000), placeDirectly: everSeen.has(s.id) })
       workers.set(s.id, w)
     }
     everSeen.add(s.id)
+    // Something ended: a little celebration, or a puff of smoke.
+    const was = lastState.get(s.id)
+    if (was !== undefined && was !== s.state && !isFirstLoad) {
+      const at = w ? { x: w.x, y: w.y } : centerOf(layout.desks.get(s.id).stand)
+      if (s.state === 'done') burst(at.x, at.y - 10, 'confetti')
+      if (s.state === 'failed') burst(at.x, at.y - 12, 'smoke')
+    }
+    lastState.set(s.id, s.state)
+    const pr = s.pr?.state
+    if (pr === 'MERGED' && lastPr.get(s.id) && lastPr.get(s.id) !== 'MERGED' && !isFirstLoad) {
+      burst(5 * T, 35 * T, 'confetti')
+      burst(centerOf(layout.desks.get(s.id).stand).x, centerOf(layout.desks.get(s.id).stand).y - 10, 'confetti')
+    }
+    if (pr) lastPr.set(s.id, pr)
     if (!w) continue
     w.session = s
     const zone = wantedZone(w, now)
@@ -453,7 +490,7 @@ function syncEntities(sessions) {
       const stand = layout.desks.get(s.id)?.stand
       if (stand && (w.goal[0] !== stand[0] || w.goal[1] !== stand[1])) walkTo(w, stand)
     }
-    // Subagents at the meeting table; a finished one brings its paper over, then leaves.
+    // Subagents at the meeting table (or beside the desk); a finished one brings its paper over, then leaves.
     const live = s.live
     const liveHelpers = s.state === 'away' ? [] : live?.helpers ?? []
     for (const h of liveHelpers) {
@@ -506,7 +543,7 @@ function syncEntities(sessions) {
   isFirstLoad = false
 }
 
-/** Timed behaviour: trips to the WC, chats at the café, the manager's rounds, the dog. */
+/** Timed behaviour: trips to the WC, chats and poses, the manager's rounds, the dog. */
 function behave(now) {
   for (const w of workers.values()) {
     if (w.dest === 'wc' && arrived(w) && !w.hidden && !w.wcDone) {
@@ -529,6 +566,13 @@ function behave(now) {
       w.bubble = { text: pick(CHAT), color: '#ffffff', ink: '#333', until: now + 3500 }
       w.sayAt = now + rnd(6000, 20000)
     }
+    // A stretch at the desk, a sip or a look at the phone at the café.
+    if (w.pose && now > w.pose.until) w.pose = null
+    if (!w.pose && arrived(w) && now > w.nextPose) {
+      const kinds = w.dest === 'cafe' ? ['sip', 'phone', 'sip'] : w.session.state === 'idle' || w.session.state === 'done' ? ['stretch'] : []
+      if (kinds.length > 0) w.pose = { kind: pick(kinds), until: now + (w.dest === 'cafe' ? 2200 : 1300) }
+      w.nextPose = now + rnd(7000, 16000)
+    }
   }
   for (const [id, e] of helpers) {
     if (e.phase === 'delivering' && arrived(e)) {
@@ -544,12 +588,10 @@ function behave(now) {
       helpers.delete(id)
     }
   }
-  if (manager) {
-    if (now > manager.nextWalk && manager.path.length === 0) {
-      const home = manager.tile[0] === manager.home[0] && manager.tile[1] === manager.home[1]
-      walkTo(manager, home ? [8, 7] : manager.home)
-      manager.nextWalk = now + (home ? 6000 : rnd(40_000, 90_000))
-    }
+  if (manager && now > manager.nextWalk && manager.path.length === 0) {
+    const home = manager.tile[0] === manager.home[0] && manager.tile[1] === manager.home[1]
+    walkTo(manager, home ? [8, 7] : manager.home)
+    manager.nextWalk = now + (home ? 6000 : rnd(40_000, 90_000))
   }
   if (dog && now > dog.nextMove && dog.path.length === 0) {
     const spots = []
@@ -558,6 +600,20 @@ function behave(now) {
     for (let r = 6; r <= 8; r++) for (let c = 7; c <= 10; c++) if (isFree(c, r)) spots.push([c, r])
     walkTo(dog, pick(spots))
     dog.nextMove = now + rnd(3000, 9000)
+  }
+}
+
+function updateParticles(dt) {
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i]
+    p.age += dt
+    if (p.age > p.life) {
+      particles.splice(i, 1)
+      continue
+    }
+    p.vy += p.g * dt
+    p.x += p.vx * dt
+    p.y += p.vy * dt
   }
 }
 
@@ -588,6 +644,89 @@ function label(text, x, y, color = '#4a4234', size = 7, align = 'left', weight =
   ctx.textBaseline = 'alphabetic'
   ctx.fillStyle = color
   ctx.fillText(text, x, y)
+}
+const timeOfDay = now => {
+  const hour = new Date(now).getHours()
+  return hour >= 21 || hour < 6 ? 'night' : hour < 8 || hour >= 18 ? 'dusk' : 'day'
+}
+
+const patterns = new Map()
+/** A floor texture: planks, a checkerboard, tiles or a carpet, over the room's tint. */
+function floorPattern(kind, tint) {
+  const key = `${kind}:${tint}`
+  if (patterns.has(key)) return patterns.get(key)
+  const c = document.createElement('canvas')
+  c.width = 32
+  c.height = 32
+  const g = c.getContext('2d')
+  g.fillStyle = tint
+  g.fillRect(0, 0, 32, 32)
+  const shade = a => `rgba(0,0,0,${a})`
+  const light = a => `rgba(255,255,255,${a})`
+  if (kind === 'wood') {
+    for (let y = 0; y < 32; y += 8) {
+      g.fillStyle = light(0.14)
+      g.fillRect(0, y, 32, 1)
+      g.fillStyle = shade(0.08)
+      g.fillRect(0, y + 7, 32, 1)
+      g.fillRect((y / 8) % 2 === 0 ? 9 : 23, y, 1, 8)
+    }
+  } else if (kind === 'checker') {
+    g.fillStyle = shade(0.08)
+    for (let y = 0; y < 32; y += 8) for (let x = 0; x < 32; x += 8) if (((x + y) / 8) % 2 === 0) g.fillRect(x, y, 8, 8)
+  } else if (kind === 'tile') {
+    g.fillStyle = light(0.3)
+    for (let i = 0; i < 32; i += 8) {
+      g.fillRect(i, 0, 1, 32)
+      g.fillRect(0, i, 32, 1)
+    }
+  } else if (kind === 'carpet') {
+    g.fillStyle = shade(0.07)
+    for (let y = 1; y < 32; y += 4) for (let x = (y / 4) % 2 === 0 ? 1 : 3; x < 32; x += 4) g.fillRect(x, y, 1, 1)
+  }
+  const p = ctx.createPattern(c, 'repeat')
+  patterns.set(key, p)
+  return p
+}
+
+function floor(x, y, w, h, kind, tint) {
+  ctx.fillStyle = floorPattern(kind, tint)
+  ctx.fillRect(x, y, w, h)
+}
+
+/** A wall: dark, with a lit top edge and a skirting line. */
+function wall(x, y, w, h) {
+  rect(x, y, w, h, '#4b3a2f')
+  rect(x, y, w, 2, '#6a5445')
+  rect(x, y + h - 1, w, 1, '#2f2420')
+}
+
+function clock(cx, cy, now) {
+  ctx.fillStyle = '#f4f5f8'
+  ctx.strokeStyle = INK
+  ctx.lineWidth = 1
+  ctx.beginPath()
+  ctx.arc(cx, cy, 5.5, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.stroke()
+  const d = new Date(now)
+  const hour = ((d.getHours() % 12) + d.getMinutes() / 60) / 12
+  const minute = d.getMinutes() / 60
+  ctx.strokeStyle = INK
+  for (const [turn, len, width] of [[hour, 2.8, 1.2], [minute, 4, 0.8]]) {
+    ctx.lineWidth = width
+    ctx.beginPath()
+    ctx.moveTo(cx, cy)
+    ctx.lineTo(cx + Math.sin(turn * Math.PI * 2) * len, cy - Math.cos(turn * Math.PI * 2) * len)
+    ctx.stroke()
+  }
+}
+
+function poster(x, y, { title, color }) {
+  rect(x, y, 26, 11, '#f4f5f8')
+  rect(x, y, 26, 1, '#c7cad5')
+  rect(x + 2, y + 2, 22, 3, color)
+  label(title, x + 13, y + 9.5, '#4a4234', 4, 'center')
 }
 
 function screen(state, verb, x, y, t) {
@@ -640,26 +779,29 @@ function screen(state, verb, x, y, t) {
     rect(x + 2, y + 6, 4, 3, '#3d8fe0')
     rect(x + 10, y + 6, 4, 3, '#3d8fe0')
   } else {
+    // Code scrolling by.
     rect(x, y, 16, 10, dark)
-    rect(x + 2, y + 2, 6, 1, '#c678dd')
-    rect(x + 9, y + 2, 4, 1, '#61afef')
-    rect(x + 4, y + 4, 8, 1, '#98c379')
-    rect(x + 4, y + 6, 5, 1, '#e5c07b')
+    const shift = Math.floor(t / 350) % 4
+    const lines = [['#c678dd', 2, 6], ['#61afef', 9, 4], ['#98c379', 4, 8], ['#e5c07b', 4, 5]]
+    lines.forEach(([color, dx, w], i) => rect(x + dx, y + 2 + ((i + shift) % 4) * 2, w, 1, color))
     rect(x + 2, y + 8, 1 + Math.floor((t / 150) % 10), 1, '#98c379')
   }
 }
 
 function drawRoomsLeft(now) {
-  const hour = new Date(now).getHours()
-  const isNight = hour >= 21 || hour < 6
-  const sky = isNight ? '#1b2440' : hour < 8 || hour >= 18 ? '#f0b27a' : '#8fc9ea'
+  const tod = timeOfDay(now)
+  const sky = tod === 'night' ? '#1b2440' : tod === 'dusk' ? '#f0b27a' : '#8fc9ea'
+  const limits = Object.values(data.lives).flatMap(l => l.limits ?? [])
+  const isOverLimit = limits.some(l => l.percentUsed >= 90)
   for (const [id, room] of Object.entries(ROOMS_LEFT)) {
-    rect(0, room.top * T, WALL_L * T, room.h * T, room.tint)
-    if (room.top > 0) rect(0, room.top * T, (WALL_L + 1) * T, T, '#4b3a2f')
+    floor(0, room.top * T, WALL_L * T, room.h * T, room.floor, room.tint)
+    if (room.top > 0) wall(0, room.top * T, (WALL_L + 1) * T, T)
     const door = room.top + Math.floor(room.h / 2)
     for (let r = room.top; r < room.top + room.h; r++) {
-      if (r === door) rect(WALL_L * T, r * T, T, T, '#b49c78')
-      else rect(WALL_L * T, r * T, T, T, '#4b3a2f')
+      if (r === door) {
+        rect(WALL_L * T, r * T, T, T, '#b49c78')
+        rect(WALL_L * T, r * T, T, 2, '#8d7a5a')
+      } else wall(WALL_L * T, r * T, T, T)
     }
     label(room.name, 4, (room.top + room.h) * T - 4, '#4a4234', 7)
     if (id === 'office') {
@@ -667,10 +809,27 @@ function drawRoomsLeft(now) {
       for (const wx of [6, 110]) {
         rect(wx, 2, 26, 9, INK)
         rect(wx + 1, 3, 24, 7, sky)
-        if (isNight) rect(wx + 4, 4, 2, 2, '#fff6c2')
-        else rect(wx + 2, 4, 3, 3, '#c4e6f7')
+        if (tod === 'night') {
+          rect(wx + 4, 4, 2, 2, '#fff6c2')
+          rect(wx + 18, 5, 1, 1, '#fff6c2')
+        } else rect(wx + 2, 4, 3, 3, '#c4e6f7')
       }
+      if (tod === 'day') {
+        ctx.fillStyle = 'rgba(255,240,170,0.16)'
+        ctx.beginPath()
+        ctx.moveTo(8, 14)
+        ctx.lineTo(30, 14)
+        ctx.lineTo(70, 150)
+        ctx.lineTo(-10, 150)
+        ctx.fill()
+      }
+      clock(58, 22, now)
+      // The red lamp: lit while a rate limit is nearly spent.
+      rect(84, 16, 8, 8, '#2d3340')
+      rect(85, 17, 6, 6, isOverLimit && Math.floor(now / 500) % 2 === 0 ? '#ff4d4d' : isOverLimit ? '#8a1f1f' : '#3a3f4d')
       rect(8, 48, 160, 100, '#8e3b46')
+      ctx.fillStyle = floorPattern('carpet', '#8e3b46')
+      ctx.fillRect(8, 48, 160, 100)
       ctx.strokeStyle = '#c8a049'
       ctx.lineWidth = 1
       ctx.strokeRect(12.5, 52.5, 151, 91)
@@ -688,11 +847,17 @@ function drawRoomsLeft(now) {
       sprite(raster(PLANT, PLANT_PALETTE), 150, 130)
     }
     if (id === 'meeting') {
+      // The projector screen names what the table is working on.
+      const working = [...helpers.values()].find(h => h.phase === 'working' && h.helper?.label)
+      rect(3 * T, 10 * T + 3, 6 * T, 11, '#f4f5f8')
+      rect(3 * T, 10 * T + 3, 6 * T, 1, '#8a8fa6')
+      label(working ? clip(working.helper.label, 20) : 'AGENDA', 6 * T, 10 * T + 11, working ? '#3d6fd6' : '#9aa0b5', 5, 'center')
       rect(3 * T, 12 * T + 4, 6 * T, 3 * T - 8, '#c8995f')
       rect(3 * T, 12 * T + 4, 6 * T, 2, '#e0b878')
       for (const [c, r] of SEATS.meeting) rect(c * T + 4, r * T + 4, 8, 8, '#5f6470')
       sprite(raster(PAPER, PAPER_PALETTE), 5 * T + 2, 13 * T + 2)
       sprite(raster(MUG, MUG_PALETTE), 7 * T + 4, 13 * T + 3)
+      sprite(raster(PLANT_SMALL, PLANT_PALETTE), 10 * T + 4, 15 * T + 6)
     }
     if (id === 'library') {
       for (let c = 0; c <= 10; c++) {
@@ -702,11 +867,21 @@ function drawRoomsLeft(now) {
       for (const c of [2, 4, 6, 8]) {
         rect(c * T + 1, 20 * T + 4, 14, 9, '#b9844f')
         rect(c * T + 1, 20 * T + 12, 14, 2, '#8d5f36')
-        rect(c * T + 4, 20 * T + 1, 7, 4, '#f4f5f8')
+        sprite(raster(BOOKS, BOOKS_PALETTE), c * T + 3, 20 * T + 1)
+        sprite(raster(LAMP, { ...BASE_PALETTE, y: '#3f9a68' }), c * T + 8, 20 * T - 2)
+        if (tod !== 'day') {
+          ctx.fillStyle = 'rgba(120,220,160,0.18)'
+          ctx.fillRect(c * T + 5, 20 * T + 2, 12, 6)
+        }
       }
       sprite(raster(PLANT, PLANT_PALETTE), 160, 20 * T + 8)
     }
     if (id === 'studio') {
+      const splats = [[20, 460], [60, 475], [120, 468], [150, 480], [40, 490], [100, 455]]
+      splats.forEach(([x, y], i) => {
+        rect(x, y, 3, 2, ['#5b8fd6', '#e5534b', '#f2c037', '#3f9a68', '#8e6ad8', '#2fa3a0'][i % 6])
+        rect(x + 3, y + 1, 1, 1, ['#5b8fd6', '#e5534b', '#f2c037', '#3f9a68', '#8e6ad8', '#2fa3a0'][i % 6])
+      })
       for (const c of [2, 5, 8]) {
         rect(c * T + 2, 26 * T - 6, 12, 14, '#f4f5f8')
         rect(c * T + 1, 26 * T - 7, 14, 1, '#6b4423')
@@ -715,40 +890,64 @@ function drawRoomsLeft(now) {
         rect(c * T + 4, 26 * T - 3, 5, 4, ['#5b8fd6', '#e5534b', '#f2c037'][c % 3])
         rect(c * T + 6, 26 * T + 2, 6, 3, ['#3f9a68', '#8e6ad8', '#2fa3a0'][c % 3])
       }
+      rect(10 * T + 2, 28 * T, 8, 6, '#c9a26b')
+      for (let i = 0; i < 4; i++) rect(10 * T + 3 + i * 2, 28 * T - 3, 1, 3, ['#e5534b', '#5b8fd6', '#f2c037', '#3f9a68'][i])
     }
     if (id === 'cafe') {
       rect(0, 32 * T, 7 * T, T, '#7a5233')
       rect(0, 32 * T, 7 * T, 3, '#9b6d45')
-      rect(2 * T, 31 * T + 4, 18, 10, '#3a3a3a')
-      rect(2 * T + 3, 31 * T + 6, 12, 5, '#1d1d1d')
-      rect(2 * T + 5, 31 * T + 7, 3, 3, '#e04a3a')
+      sprite(raster(ESPRESSO, ESPRESSO_PALETTE), 2 * T, 31 * T + 6)
+      const puff = Math.floor(now / 300) % 3
+      for (let i = 0; i < 3; i++) {
+        ctx.globalAlpha = 0.5 - ((i + puff) % 3) * 0.15
+        rect(2 * T + 3 + i * 3, 31 * T + 2 - ((i + puff) % 3) * 2, 1, 1, '#ffffff')
+      }
+      ctx.globalAlpha = 1
       sprite(raster(MUG, MUG_PALETTE), 4 * T + 6, 31 * T + 9)
-      sprite(raster(MUG, MUG_PALETTE), 5 * T + 4, 31 * T + 9)
+      sprite(raster(PASTRY, PASTRY_PALETTE), 5 * T + 4, 31 * T + 10)
       for (const c of [2, 7]) {
         rect(c * T, 35 * T + 2, T, T - 4, '#c9a26b')
         rect(c * T + 1, 35 * T + 3, T - 2, 2, '#e0c08a')
         sprite(raster(MUG, MUG_PALETTE), c * T + 5, 35 * T + 5)
       }
       sprite(raster(PLANT, PLANT_PALETTE), 9 * T + 4, 32 * T + 2)
+      poster(8 * T + 2, 31 * T + 3, POSTERS[2])
     }
     if (id === 'wc') {
       rect(8 * T, 39 * T, 2 * T, 2 * T + 8, '#e6e8ef')
       rect(8 * T + 4, 39 * T + 4, 24, 12, '#3d6fd6')
       label('WC', 9 * T, 39 * T + 13, '#ffffff', 7, 'center')
       rect(8 * T + 14, 40 * T + 2, 4, 4, '#2d3340')
+      rect(2 * T, 39 * T + 2, 12, 10, '#f4f5f8')
+      rect(2 * T + 1, 39 * T + 3, 10, 8, '#cfe3f5')
     }
   }
-  // The hall.
-  rect(HALL.x0 * T, 0, (HALL.x1 - HALL.x0 + 1) * T, layout.ROWS * T, '#c9c3b5')
-  for (let r = 0; r < layout.ROWS; r++) rect(HALL.x0 * T, r * T, (HALL.x1 - HALL.x0 + 1) * T, 1, '#bdb6a6')
-  rect((HALL.x0 + 1) * T - 4, layout.ROWS * T - 6, T + 8, 6, '#8e939c')
-  label('ENTRANCE', (HALL.x0 + 1) * T + 8, layout.ROWS * T - 9, '#6b6252', 5, 'center')
+  // The hall and the entrance.
+  floor(HALL.x0 * T, 0, (HALL.x1 - HALL.x0 + 1) * T, layout.ROWS * T, 'tile', '#c9c3b5')
+  drawDoor(now)
+}
+
+function drawDoor() {
+  const [c, r] = layout.entrance
+  const x = c * T
+  const y = r * T
+  const near = [...workers.values(), ...helpers.values()].some(e => !e.hidden && Math.abs(e.x - (x + 8)) < 22 && Math.abs(e.y - (y + 8)) < 22)
+  rect(x - 2, y + 10, T + 4, 6, '#8e939c')
+  if (near) {
+    rect(x - 1, y + 10, 4, 6, '#6b4423')
+    rect(x + 3, y + 11, 10, 4, '#2a2520')
+  } else {
+    rect(x, y + 10, T, 6, '#6b4423')
+    rect(x + 11, y + 12, 2, 2, '#f2c037')
+  }
+  label('ENTRANCE', x + 8, y + 8, '#6b6252', 5, 'center')
 }
 
 function drawBoards(now) {
   const fresh = [...Object.values(data.lives)].sort((a, b) => b.at - a.at)
   const withLimits = fresh.find(l => (l.limits ?? []).length > 0)
-  const focus = (selected && data.lives[[...workers.values()].find(w => w.id === selected)?.session.live?.id]) ?? fresh[0]
+  const picked = selected ? fresh.find(l => keyOf(l) === selected) : undefined
+  const focus = picked ?? fresh[0]
   const board = (x, y, w, h, title) => {
     rect(x, y + h, 2, 3, INK)
     rect(x + w - 2, y + h, 2, 3, INK)
@@ -776,8 +975,9 @@ function drawBoards(now) {
 }
 
 function drawBin() {
-  const fresh = [...Object.values(data.lives)].sort((a, b) => b.at - a.at)[0]
-  const balls = Math.min(6, Math.round((fresh?.context ?? 0) / 17))
+  const fresh = [...Object.values(data.lives)].sort((a, b) => b.at - a.at)
+  const picked = selected ? fresh.find(l => keyOf(l) === selected) : undefined
+  const balls = Math.min(6, Math.round(((picked ?? fresh[0])?.context ?? 0) / 17))
   const x = 9 * T + 3
   const y = 6 * T + 4
   rect(x, y, 10, 9, '#5c6270')
@@ -785,20 +985,45 @@ function drawBin() {
   for (let i = 0; i < balls; i++) rect(x + 1.5 + (i % 3) * 2.5, y + 6 - Math.floor(i / 3) * 2.5, 2, 2, '#f4f5f8')
 }
 
+/** The things on a desk, two of them, picked by the session's id. */
+function accessories(seed, x, y, tod) {
+  const kinds = ['plant', 'lamp', 'duck', 'photo', 'monitor', 'books']
+  const left = kinds[seed % kinds.length]
+  const right = kinds[(seed >>> 6) % kinds.length]
+  const draw = (kind, px, py) => {
+    if (kind === 'plant') sprite(raster(PLANT_SMALL, PLANT_PALETTE), px, py + 7)
+    if (kind === 'lamp') {
+      sprite(raster(LAMP, BASE_PALETTE), px, py + 6)
+      if (tod !== 'day') {
+        ctx.fillStyle = 'rgba(255,220,120,0.22)'
+        ctx.fillRect(px - 3, py + 10, 12, 6)
+      }
+    }
+    if (kind === 'duck') sprite(raster(DUCK, DUCK_PALETTE), px + 1, py + 8)
+    if (kind === 'photo') sprite(raster(PHOTO, PHOTO_PALETTE), px + 1, py + 8)
+    if (kind === 'monitor') sprite(raster(MONITOR2, MONITOR2_PALETTE), px - 1, py + 5)
+    if (kind === 'books') sprite(raster(BOOKS, BOOKS_PALETTE), px + 2, py + 9)
+  }
+  draw(left, x + 3, y)
+  draw(right === left ? 'plant' : right, x + 34, y)
+}
+
 function drawBands(now) {
+  const tod = timeOfDay(now)
   for (const band of layout.rooms) {
-    rect(WALL_R * T, band.top * T, (COLS - WALL_R) * T, band.h * T, band.tint)
-    rect(WALL_R * T, band.top * T, (COLS - WALL_R) * T, T, '#a39a86')
+    floor(WALL_R * T, band.top * T, (COLS - WALL_R) * T, band.h * T, 'wood', band.tint)
+    wall(WALL_R * T, band.top * T, (COLS - WALL_R) * T, T)
     for (let r = band.top; r < band.top + band.h; r++) {
       if (r === band.top + 2) rect(WALL_R * T, r * T, T, T, '#b49c78')
-      else rect(WALL_R * T, r * T, T, T, '#4b3a2f')
+      else wall(WALL_R * T, r * T, T, T)
     }
     const present = band.members.filter(s => s.state !== 'away').length
     const busy = band.members.filter(s => s.state === 'working' || s.state === 'waiting').length
-    label(band.isCollapsed ? '▸' : '▾', WALL_R * T + 21, band.top * T + 11.5, '#2b2620', 8)
-    label(band.name, WALL_R * T + 32, band.top * T + 11, '#2b2620', 7)
-    label(`${present}/${band.members.length} in · ${busy} busy`, COLS * T - 6, band.top * T + 11, '#4a4234', 6, 'right', '500')
+    label(band.isCollapsed ? '▸' : '▾', WALL_R * T + 21, band.top * T + 11.5, '#f4e9d2', 8)
+    label(band.name, WALL_R * T + 32, band.top * T + 11, '#f4e9d2', 7)
+    label(`${present}/${band.members.length} in · ${busy} busy`, COLS * T - 6, band.top * T + 11, '#d9ccb0', 6, 'right', '500')
     if (band.isCollapsed) continue
+    poster(WALL_R * T + 150, band.top * T + 2, band.poster)
     for (const s of band.members) {
       const desk = layout.desks.get(s.id)
       const x = (desk.c + 1) * T + 10
@@ -811,10 +1036,19 @@ function drawBands(now) {
       }
       ctx.globalAlpha = s.state === 'away' ? 0.75 : 1
       sprite(raster(DESK, DESK_PALETTE), x, y)
+      accessories(hash(s.id), x, y, tod)
       const w = workers.get(s.id)
       const atDesk = w && w.dest === 'desk' && arrived(w) && !w.hidden
       screen(s.state === 'away' ? 'away' : atDesk ? s.state : 'idle', s.live?.verb, x + 14, y + 1, now)
+      if (tod === 'night' && s.state !== 'away') {
+        ctx.fillStyle = 'rgba(143,201,234,0.10)'
+        ctx.fillRect(x + 12, y + 11, 20, 8)
+      }
+      // Papers pile up as the context fills.
+      const pile = Math.min(6, Math.round((s.live?.context ?? 0) / 15))
+      for (let i = 0; i < pile; i++) rect(x + 3 + (i % 2), y + 13 - i * 2, 8, 2, i % 2 === 0 ? '#f4f5f8' : '#e6e8ef')
       if (s.state === 'away') sprite(raster(CHAIR, CHAIR_PALETTE), desk.stand[0] * T + 3, desk.stand[1] * T - 2)
+      else if (!atDesk) sprite(raster(CHAIR, CHAIR_PLAIN_PALETTE, 'chair-plain'), desk.stand[0] * T + 3, desk.stand[1] * T - 2)
       ctx.globalAlpha = 1
       tag(clip(s.title, 15), (desk.c + 3) * T, (desk.r + 4) * T + 3, DOTS[s.state], isMine)
     }
@@ -862,18 +1096,26 @@ function bubble(text, cx, y, fill = '#ffffff', ink = '#333333') {
   label(text, x + 4, y - 3, ink, 6, 'left', '500')
 }
 
+function shadow(x, y, rx = 6) {
+  ctx.fillStyle = 'rgba(0,0,0,0.16)'
+  ctx.beginPath()
+  ctx.ellipse(x, y, rx, 2.2, 0, 0, Math.PI * 2)
+  ctx.fill()
+}
+
 function drawEntities(now) {
   const all = [...workers.values(), ...helpers.values(), manager, dog].filter(e => e && !e.hidden)
   all.sort((a, b) => a.y - b.y)
   for (const e of all) {
     const walking = e.isWalking
-    const frame = walking ? (Math.floor(e.frame / 8) % 2 === 0 ? 'walk1' : 'walk2') : 'stand'
+    const frame = walking ? ['walk1', 'walk2', 'walk3', 'walk4'][Math.floor(e.frame / 6) % 4] : 'stand'
     if (e.kind === 'worker') {
       const s = e.session
       const sitting = !walking && (e.dest === 'cafe' || e.dest === 'library') && arrived(e)
       const img = person(e.look, sitting ? 'sit' : frame)
       const hop = s.state === 'working' && !walking && arrived(e) ? Math.round(Math.abs(Math.sin(now / 160))) : 0
       const bounce = s.state === 'waiting' ? Math.round(Math.abs(Math.sin(now / 150)) * 3) : 0
+      shadow(e.x, e.y + 7.5)
       if (selected === e.id) {
         ctx.strokeStyle = '#f2c037'
         ctx.lineWidth = 1
@@ -881,18 +1123,33 @@ function drawEntities(now) {
         ctx.ellipse(e.x, e.y + 7, 8, 3, 0, 0, Math.PI * 2)
         ctx.stroke()
       }
-      sprite(img, e.x - 5, e.y - 10 - hop - bounce, e.dir < 0)
+      const top = e.y - 10 - hop - bounce
+      sprite(img, e.x - 5, top, e.dir < 0)
+      if (e.pose?.kind === 'stretch') {
+        rect(e.x - 5, top - 1, 2, 2, e.look.skin)
+        rect(e.x + 3, top - 1, 2, 2, e.look.skin)
+      }
+      if (e.pose?.kind === 'sip') sprite(raster(MUG, MUG_PALETTE), e.x + 2, top + 5)
+      if (e.pose?.kind === 'phone') sprite(raster(PHONE, PHONE_PALETTE), e.x + 3, top + 8)
       if (e.dest === 'library' && arrived(e)) sprite(raster(['bbb', 'bwb', 'bbb'], { b: '#4f7cc9', w: '#fff' }), e.x + 4, e.y - 2)
       if (e.dest === 'studio' && arrived(e)) rect(e.x + 5, e.y - 4, 3, 5, '#e5534b')
+      // Long idle at the café: little z's drift up.
+      if (e.dest === 'cafe' && arrived(e) && now - (s.live?.since ?? now) > SLEEPY_MS) {
+        const phase = (now / 1400) % 1
+        ctx.globalAlpha = 1 - phase
+        label('z', e.x + 6 + phase * 3, e.y - 12 - phase * 9, '#3d4258', 5 + phase * 2)
+        ctx.globalAlpha = 1
+      }
       const text = bubbleText(e, now)
       if (text) bubble(text.text, e.x, e.y - 14 - bounce, text.fill, text.ink)
       if (e.dest !== 'desk' && !walking) {
-        const row = e.seat ? SEATS[e.seat.zone].findIndex(([c, r]) => c === e.seat.c && r === e.seat.r) % 2 : 0
-        tag(clip(s.title, 10), e.x, e.y + 14 + row * 8, DOTS[s.state], selected === e.id)
+        const row = e.seat ? SEATS[e.seat.zone]?.findIndex(([c, r]) => c === e.seat.c && r === e.seat.r) % 2 : 0
+        tag(clip(s.title, 10), e.x, e.y + 14 + (row || 0) * 8, DOTS[s.state], selected === e.id)
       }
     } else if (e.kind === 'helper') {
       const img = mini(e.seed, e.phase === 'working' && !walking && arrived(e) ? 'sit' : frame)
       const hop = e.phase === 'working' && arrived(e) ? Math.round(Math.abs(Math.sin(now / 170 + e.seed))) : 0
+      shadow(e.x, e.y + 7, 4)
       sprite(img, e.x - 3, e.y - 3 - hop, e.dir < 0)
       if (e.phase !== 'working') sprite(raster(PAPER, PAPER_PALETTE), e.x + 2, e.y - 6)
       if (e.helper?.isFailed) rect(e.x - 1, e.y - 10, 1, 4, '#e5534b')
@@ -902,15 +1159,22 @@ function drawEntities(now) {
       const busy = [...workers.values()].filter(w => w.session.state === 'working').length
       const waiting = [...workers.values()].filter(w => w.session.state === 'waiting').length
       const hop = busy > 0 && !walking ? Math.round(Math.abs(Math.sin(now / 180))) : 0
+      shadow(e.x, e.y + 7.5, 8)
       sprite(mascot(walking && Math.floor(e.frame / 8) % 2 === 0), e.x - 8, e.y - 7 - hop, e.dir < 0)
       const says = waiting > 0 ? `${waiting} need${waiting === 1 ? 's' : ''} you` : busy > 0 ? `${busy} at work` : workers.size > 0 ? 'all quiet' : 'nobody in yet'
       bubble(says, e.x, e.y - 12, waiting > 0 ? '#fff1c2' : '#ffffff', waiting > 0 ? '#7a4d00' : '#333')
       tag('Claude · manager', e.x, e.y + 14, DOTS[waiting > 0 ? 'waiting' : busy > 0 ? 'working' : 'idle'], false)
     } else if (e.kind === 'dog') {
-      const f = walking ? Math.floor(e.frame / 6) % 2 : 0
+      const f = walking ? Math.floor(e.frame / 5) % 4 : 0
+      shadow(e.x, e.y + 8, 6)
       sprite(raster(DOG[f], DOG_PALETTE, `dog${f}`), e.x - 7, e.y + 1, e.dir < 0)
     }
   }
+  for (const p of particles) {
+    ctx.globalAlpha = Math.max(0, 1 - p.age / p.life)
+    rect(p.x, p.y, p.size, p.size, p.color)
+  }
+  ctx.globalAlpha = 1
 }
 
 function bubbleText(w, now) {
@@ -934,8 +1198,7 @@ function bubbleText(w, now) {
   }
 }
 
-function drawWalls() {
-  // The outer frame of what is not a room: where the bands end before the left column does, and the reverse.
+function drawOutside() {
   for (let r = 0; r < layout.ROWS; r++) {
     for (let c = 0; c < COLS; c++) {
       if (!layout.blocked[r][c]) continue
@@ -954,19 +1217,23 @@ function simulate() {
   if (!layout) return
   for (const e of [...workers.values(), ...helpers.values(), manager, dog]) if (e) step(e, dt)
   behave(now)
+  updateParticles(Math.min(dt, 0.2))
 }
 setInterval(simulate, SIM_MS)
 
-function frame() {
+function draw() {
   const now = Date.now()
-  if (layout) {
-    ctx.setTransform(ZOOM, 0, 0, ZOOM, 0, 0)
-    rect(0, 0, COLS * T, layout.ROWS * T, '#4b3a2f')
-    drawRoomsLeft(now)
-    drawBands(now)
-    drawWalls()
-    drawEntities(now)
-  }
+  if (!layout) return
+  ctx.setTransform(ZOOM, 0, 0, ZOOM, 0, 0)
+  rect(0, 0, COLS * T, layout.ROWS * T, '#4b3a2f')
+  drawRoomsLeft(now)
+  drawBands(now)
+  drawOutside()
+  drawEntities(now)
+}
+
+function frame() {
+  draw()
   requestAnimationFrame(frame)
 }
 
@@ -993,8 +1260,28 @@ function onData() {
   const working = sessions.filter(s => s.state === 'working').length
   const waiting = sessions.filter(s => s.state === 'waiting').length
   document.getElementById('counts').textContent = `${sessions.length} desks · ${present} in · ${working} working · ${waiting} waiting for you`
-  document.getElementById('mode').textContent = data.isDemo ? 'demo office' : `${data.sources ?? 0} store file${data.sources === 1 ? '' : 's'}${isRemote ? ' · locked' : ''}`
+  document.getElementById('mode').textContent = data.isDemo ? 'demo office' : `${data.sources ?? 0} store file${data.sources === 1 ? '' : 's'}${isLocked ? ' · locked' : ''}`
+  updateTicker(sessions)
   if (selected) renderPanel()
+}
+
+let tickerText = ''
+/** The latest calls of every session, scrolling under the office. */
+function updateTicker(sessions) {
+  const when = at => new Date(at).toTimeString().slice(0, 5)
+  const lines = sessions
+    .flatMap(s => (s.live?.log ?? []).map(entry => ({ ...entry, title: s.title })))
+    .sort((a, b) => b.at - a.at)
+    .slice(0, 14)
+    .map(entry => `${when(entry.at)} ${clip(entry.title, 18)}: ${entry.who ? `${clip(entry.who, 14)} › ` : ''}${entry.verb} ${entry.detail ?? ''}`.trim())
+  const text = lines.join('   ·   ')
+  if (text === tickerText) return
+  tickerText = text
+  const span = document.getElementById('ticker-text')
+  span.textContent = text || 'nothing logged yet'
+  span.style.animation = 'none'
+  void span.offsetWidth
+  span.style.animation = ''
 }
 
 setInterval(() => {
@@ -1085,7 +1372,7 @@ canvas.addEventListener('click', event => {
 })
 
 // A handle for debugging from the console.
-window.__hq = { get layout() { return layout }, workers, helpers, prefs, findPath, setMode, sessionsOf }
+window.__hq = { get layout() { return layout }, workers, helpers, prefs, findPath, setMode, sessionsOf, draw, burst, particles }
 
 void poll()
 setInterval(poll, 2000)
