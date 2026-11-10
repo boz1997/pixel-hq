@@ -2,7 +2,7 @@ import type { DeskState, Live } from '../types'
 import type { Desk, Room } from './model'
 import { LIMIT_NAMES, ago, clip, hash, resets } from './model'
 import {
-  BASE_PALETTE, CAT, CAT_PALETTE, CHAIR, CHAIR_PALETTE, CHECK, CLAUDE, CROWN, HAIRS, HAIR_STYLES, HATS, HAT_COLORS,
+  BASE_PALETTE, CHAIR, CHAIR_PALETTE, CHECK, CLAUDE, CROWN, DOG, DOG_PALETTE, HAIRS, HAIR_STYLES, HATS, HAT_COLORS,
   HAT_NAMES, INK, MASCOT, MINI, PERSON, PLANT, PLANT_PALETTE, SHIRTS, SKINS,
 } from './sprites'
 import type { Rows } from './sprites'
@@ -169,12 +169,12 @@ const MASCOT_SYMBOL = symbol('hq-boss', [
 ])
 const PLANT_SYMBOL = symbol('hq-plant', [{ rows: PLANT, palette: PLANT_PALETTE }])
 const CHECK_SYMBOL = symbol('hq-check', [{ rows: CHECK, palette: { L: '#2e9d57' } }])
-const CAT_SYMBOL = symbol('hq-cat', [{ rows: CAT, palette: CAT_PALETTE }])
+const DOG_SYMBOL = symbol('hq-dog', [{ rows: DOG, palette: DOG_PALETTE }])
 
 const STYLE =
   '<style>' +
-  '@keyframes hq-cat{0%{transform:translate(0,0) scaleX(1)}45%{transform:translate(78px,0) scaleX(1)}50%{transform:translate(78px,0) scaleX(-1)}95%{transform:translate(0,0) scaleX(-1)}100%{transform:translate(0,0) scaleX(1)}}' +
-  '.hq-cat{animation:hq-cat 18s linear infinite;transform-box:fill-box;transform-origin:center}' +
+  '@keyframes hq-dog{0%{transform:translate(0,0) scaleX(1)}45%{transform:translate(76px,0) scaleX(1)}50%{transform:translate(76px,0) scaleX(-1)}95%{transform:translate(0,0) scaleX(-1)}100%{transform:translate(0,0) scaleX(1)}}' +
+  '.hq-dog{animation:hq-dog 16s linear infinite;transform-box:fill-box;transform-origin:center}' +
   '</style>'
 
 /** The wire bin by the boss's desk: it fills with paper as this session's context does. */
@@ -530,7 +530,7 @@ function hqBand(view: View, now: number): string {
     limitsBoard(me, now, 172, 24) +
     use('hq-plant', W - M - 12, HQ_H - 14) +
     bin(me.context, 104, 68) +
-    `<g class="hq-cat"><g transform="translate(120 ${HQ_H - 9})">${use('hq-cat', 0, 0)}</g></g>` +
+    `<g class="hq-dog"><g transform="translate(118 ${HQ_H - 10})">${use('hq-dog', 0, 0)}</g></g>` +
     `<rect x="0" y="0" width="${W}" height="${HQ_H}" fill="#000" fill-opacity="0" pointer-events="all"><title>${esc(`Claude, the manager\n${says}\n${counts.present} of ${counts.desks} sessions have someone in`)}</title></rect>`
   )
 }
@@ -563,7 +563,7 @@ export function drawOffice(view: View, now: number): string {
     MASCOT_SYMBOL +
     PLANT_SYMBOL +
     CHECK_SYMBOL +
-    CAT_SYMBOL +
+    DOG_SYMBOL +
     [...cast.values()].join('') +
     `</defs>`
 

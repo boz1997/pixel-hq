@@ -74,9 +74,28 @@ function serveStatic(req, res) {
   send(res, 200, TYPES[path.extname(full)] ?? 'application/octet-stream', fs.readFileSync(full))
 }
 
-function openBrowser(url) {
+const APP_BROWSERS = ['Google Chrome', 'Microsoft Edge', 'Brave Browser', 'Chromium', 'Arc']
+
+/** Opens the office in a window of its own (a Chromium browser's app mode) where one is installed, else in the browser. */
+function openBrowser(url, asApp) {
+  if (asApp && process.platform === 'darwin') {
+    const name = APP_BROWSERS.find(one => fs.existsSync(`/Applications/${one}.app`))
+    if (name) {
+      exec(`open -na "${name}" --args --app="${url}" --window-size=1180,940`, () => undefined)
+      return name
+    }
+  }
+  if (asApp && process.platform === 'win32') {
+    exec(`start "" chrome --app="${url}" --window-size=1180,940 || start "" msedge --app="${url}" || start "" "${url}"`, () => undefined)
+    return 'a browser window'
+  }
+  if (asApp && process.platform === 'linux') {
+    exec(`(google-chrome --app="${url}" || chromium --app="${url}" || xdg-open "${url}") >/dev/null 2>&1`, () => undefined)
+    return 'a browser window'
+  }
   const command = process.platform === 'darwin' ? `open "${url}"` : process.platform === 'win32' ? `start "" "${url}"` : `xdg-open "${url}"`
   exec(command, () => undefined)
+  return 'the browser'
 }
 
 /** The addresses another device on the same network reaches this computer by. */
@@ -90,7 +109,7 @@ function networkAddresses() {
   return out
 }
 
-export function startServer({ port = 2323, host = '0.0.0.0', open = true, password, demo = false } = {}) {
+export function startServer({ port = 2323, host = '0.0.0.0', open = true, asApp = true, password, demo = false } = {}) {
   const state = () => (demo ? demoState() : readState())
   const server = http.createServer((req, res) => {
     const url = new URL(req.url, 'http://localhost')
@@ -108,7 +127,7 @@ export function startServer({ port = 2323, host = '0.0.0.0', open = true, passwo
     }
     serveStatic(req, res)
   })
-  server.listen(port, host, () => {
+  server.on('listening', () => {
     const local = `http://localhost:${port}`
     const files = storeFiles()
     console.log(`Pixel HQ at ${local}`)
@@ -120,9 +139,19 @@ export function startServer({ port = 2323, host = '0.0.0.0', open = true, passwo
     }
     if (demo) console.log('showing the demo office; drop --demo to see your own sessions')
     else console.log(files.length > 0 ? `reading ${files.length} store file${files.length === 1 ? '' : 's'} under ${STORE_DIR}` : `no store file under ${STORE_DIR} yet: install the mod and open a session (or try --demo)`)
-    if (open) openBrowser(local)
+    if (open) console.log(`opening it in ${openBrowser(local, asApp)}`)
   })
+  server.listen(port, host)
+  // A taken port is skipped, up to ten times, so a second copy just lands on the next one.
+  let tries = 0
   server.on('error', error => {
+    if (error.code === 'EADDRINUSE' && tries < 10) {
+      tries += 1
+      console.log(`port ${port} is taken, trying ${port + 1}`)
+      port += 1
+      server.listen(port, host)
+      return
+    }
     console.error(error.code === 'EADDRINUSE' ? `port ${port} is taken; try --port ${port + 1}` : error.message)
     process.exit(1)
   })

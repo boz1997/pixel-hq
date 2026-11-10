@@ -2,7 +2,7 @@
 
 A pixel-art office of every Claude Code session. Two ways to look at it:
 
-- **The office app**, in your browser, and on your phone over the same Wi-Fi: a living scene. People walk between their desk, the library, the studio and the café; subagents work at the meeting table and bring their results over; the manager does the rounds; there is a cat. One command runs it.
+- **The office app**, in your browser, and on your phone over the same Wi-Fi: a living scene. People walk between their desk, the library, the studio and the café; subagents work at the meeting table and bring their results over; the manager does the rounds; there is a black labrador. One command runs it.
 - **The pane**, inside the Claude Code desktop app: a still picture of the same office beside the chat, redrawn as things happen.
 
 Both are fed by **the mod**, a Claude Code plugin that runs in every session and publishes what that session is doing to a file on your machine. Nothing leaves your computer.

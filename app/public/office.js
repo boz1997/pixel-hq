@@ -1,7 +1,7 @@
 // Pixel HQ: the office of every Claude Code session, as a living scene.
 // Data comes from /api/state (what each session's mod published); everything else is here.
 import {
-  BASE_PALETTE, CAT, CAT_PALETTE, CHAIR, CHAIR_PALETTE, CHECK, DESK, DESK_PALETTE, INK, MUG, MUG_PALETTE,
+  BASE_PALETTE, CHAIR, CHAIR_PALETTE, CHECK, DESK, DESK_PALETTE, DOG, DOG_PALETTE, INK, MUG, MUG_PALETTE,
   PAPER, PAPER_PALETTE, PLANT, PLANT_PALETTE, hash, lookOf, mascot, mini, person, raster,
 } from './sprites.js'
 
@@ -268,7 +268,7 @@ const workers = new Map()
 const helpers = new Map()
 const delivered = new Set()
 let manager = null
-let cat = null
+let dog = null
 let selected = null
 let isFirstLoad = true
 
@@ -423,14 +423,14 @@ function syncEntities(sessions) {
     manager = spawn('manager', [4, 7], { id: 'manager', home: [4, 7], nextWalk: now + rnd(40_000, 90_000) })
     manager.goal = [4, 7]
   }
-  if (!cat) {
-    cat = spawn('cat', [13, 20], { id: 'cat', nextMove: now + 2000 })
-    cat.goal = [13, 20]
+  if (!dog) {
+    dog = spawn('dog', [13, 20], { id: 'dog', nextMove: now + 2000 })
+    dog.goal = [13, 20]
   }
   isFirstLoad = false
 }
 
-/** Timed behaviour: trips to the WC, chats at the café, the manager's rounds, the cat. */
+/** Timed behaviour: trips to the WC, chats at the café, the manager's rounds, the dog. */
 function behave(now) {
   for (const w of workers.values()) {
     if (w.dest === 'wc' && arrived(w) && !w.hidden && !w.wcDone) {
@@ -475,12 +475,13 @@ function behave(now) {
       manager.nextWalk = now + (home ? 6000 : rnd(40_000, 90_000))
     }
   }
-  if (cat && now > cat.nextMove && cat.path.length === 0) {
+  if (dog && now > dog.nextMove && dog.path.length === 0) {
     const spots = []
     for (let r = 0; r < layout.ROWS; r++) for (let c = HALL.x0; c <= HALL.x1; c++) if (isFree(c, r)) spots.push([c, r])
     for (let r = 33; r <= 37; r++) for (let c = 0; c <= 10; c++) if (isFree(c, r)) spots.push([c, r])
-    walkTo(cat, pick(spots))
-    cat.nextMove = now + rnd(3000, 9000)
+    for (let r = 6; r <= 8; r++) for (let c = 7; c <= 10; c++) if (isFree(c, r)) spots.push([c, r])
+    walkTo(dog, pick(spots))
+    dog.nextMove = now + rnd(3000, 9000)
   }
 }
 
@@ -784,7 +785,7 @@ function bubble(text, cx, y, fill = '#ffffff', ink = '#333333') {
 }
 
 function drawEntities(now) {
-  const all = [...workers.values(), ...helpers.values(), manager, cat].filter(e => e && !e.hidden)
+  const all = [...workers.values(), ...helpers.values(), manager, dog].filter(e => e && !e.hidden)
   all.sort((a, b) => a.y - b.y)
   for (const e of all) {
     const walking = e.isWalking
@@ -827,8 +828,9 @@ function drawEntities(now) {
       const says = waiting > 0 ? `${waiting} need${waiting === 1 ? 's' : ''} you` : busy > 0 ? `${busy} at work` : workers.size > 0 ? 'all quiet' : 'nobody in yet'
       bubble(says, e.x, e.y - 12, waiting > 0 ? '#fff1c2' : '#ffffff', waiting > 0 ? '#7a4d00' : '#333')
       tag('Claude · manager', e.x, e.y + 14, DOTS[waiting > 0 ? 'waiting' : busy > 0 ? 'working' : 'idle'], false)
-    } else if (e.kind === 'cat') {
-      sprite(raster(CAT[walking ? Math.floor(e.frame / 6) % 2 : 0], CAT_PALETTE, `cat${walking ? Math.floor(e.frame / 6) % 2 : 0}`), e.x - 6, e.y + 2, e.dir < 0)
+    } else if (e.kind === 'dog') {
+      const f = walking ? Math.floor(e.frame / 6) % 2 : 0
+      sprite(raster(DOG[f], DOG_PALETTE, `dog${f}`), e.x - 7, e.y + 1, e.dir < 0)
     }
   }
 }
@@ -869,7 +871,7 @@ function drawWalls() {
 function frame() {
   const now = Date.now()
   if (layout) {
-    for (const e of [...workers.values(), ...helpers.values(), manager, cat]) if (e) step(e)
+    for (const e of [...workers.values(), ...helpers.values(), manager, dog]) if (e) step(e)
     behave(now)
     ctx.setTransform(ZOOM, 0, 0, ZOOM, 0, 0)
     rect(0, 0, COLS * T, layout.ROWS * T, '#4b3a2f')

@@ -134,11 +134,12 @@ export const DESK_PALETTE = { k: INK, u: '#5a5f73', t: '#b9844f', T: '#8d5f36', 
 export const PLANT = ['...gg...', '..gggg..', '.gGgggGg', '..gggg..', '...bb...', '..bbbb..', '..bbbb..']
 export const PLANT_PALETTE = { g: '#4f9a55', G: '#7bd17f', b: '#b5653d' }
 
-export const CAT = [
-  ['.........a.a', '.........aaa', 'a.aaaaaaaaea', '.aaaaaaaaaaa', '.aaaaaaaaaa.', '.a..a..a..a.'],
-  ['.........a.a', '.........aaa', '.aaaaaaaaaea', 'a.aaaaaaaaaa', '.aaaaaaaaaa.', 'a..a....a..a'],
+/** A black labrador, 14 wide and 7 tall, facing right: two frames of trotting. */
+export const DOG = [
+  ['............d.', 'd.........dddd', 'dd.ddddddddDdn', '.ddddddddddrdd', '.dddddddddddd.', '..dd....dd....', '..dd....dd....'],
+  ['............d.', 'd.........dddd', 'dd.ddddddddDdn', '.ddddddddddrdd', '.dddddddddddd.', '.dd......dd...', 'dd........dd..'],
 ]
-export const CAT_PALETTE = { a: '#8a7a6a', e: '#222222' }
+export const DOG_PALETTE = { d: '#1b1b1f', D: '#f0e6c8', n: '#4a4a52', r: '#e0484d' }
 
 export const CHECK = ['....L', '...L.', 'L.L..', '.L...']
 export const PAPER = ['wwwww', 'wggww', 'wgggw', 'wggww', 'wwwww']

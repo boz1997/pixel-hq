@@ -113,16 +113,17 @@ export const PLANT: Rows = [
 ]
 export const PLANT_PALETTE: Record<string, string> = { g: '#4f9a55', G: '#7bd17f', b: '#b5653d' }
 
-/** A cat, 12 wide and 6 tall, facing right, tail up. */
-export const CAT: Rows = [
-  '.........a.a',
-  '.........aaa',
-  'a.aaaaaaaaea',
-  '.aaaaaaaaaaa',
-  '.aaaaaaaaaa.',
-  '.a..a..a..a.',
+/** A black labrador, 14 wide and 7 tall, facing right. */
+export const DOG: Rows = [
+  '............d.',
+  'd.........dddd',
+  'dd.ddddddddDdn',
+  '.ddddddddddrdd',
+  '.dddddddddddd.',
+  '..dd....dd....',
+  '..dd....dd....',
 ]
-export const CAT_PALETTE: Record<string, string> = { a: '#8a7a6a', e: '#222222' }
+export const DOG_PALETTE: Record<string, string> = { d: '#1b1b1f', D: '#f0e6c8', n: '#4a4a52', r: '#e0484d' }
 
 /** A helper, 6 wide and 8 tall: a subagent beside its session's desk. */
 export const MINI: Rows = ['.hhhh.', 'hhhhhh', '.sese.', '.ssss.', '.cccc.', 'cccccc', '.pppp.', '.k..k.']
