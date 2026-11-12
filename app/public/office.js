@@ -791,7 +791,7 @@ function screen(state, verb, x, y, t) {
 function drawRoomsLeft(now) {
   const tod = timeOfDay(now)
   const sky = tod === 'night' ? '#1b2440' : tod === 'dusk' ? '#f0b27a' : '#8fc9ea'
-  const peak = Math.max(0, ...usageRows(now).map(row => row.percentUsed))
+  const peak = usagePeak(now)
   for (const [id, room] of Object.entries(ROOMS_LEFT)) {
     floor(0, room.top * T, WALL_L * T, room.h * T, room.floor, room.tint)
     if (room.top > 0) wall(0, room.top * T, (WALL_L + 1) * T, T)
@@ -823,9 +823,11 @@ function drawRoomsLeft(now) {
         ctx.fill()
       }
       clock(58, 22, now)
-      // The red lamp: blinks while a limit is nearly spent, stays lit once one is.
+      // The red lamp: blinks while a limit is nearly spent, flashes with the room once one is.
+      const beat = alarmPulse(now)
       rect(84, 16, 8, 8, '#2d3340')
-      rect(85, 17, 6, 6, peak >= 100 || (peak >= 90 && Math.floor(now / 500) % 2 === 0) ? '#ff4d4d' : peak >= 90 ? '#8a1f1f' : '#3a3f4d')
+      rect(85, 17, 6, 6, peak >= 100 ? (beat > 0.35 ? '#ff4d4d' : '#6e1818') : peak >= 90 ? (Math.floor(now / 500) % 2 === 0 ? '#ff4d4d' : '#8a1f1f') : '#3a3f4d')
+      if (peak >= 100 && beat > 0.7) rect(86, 18, 2, 2, '#ffd9d9')
       rect(8, 48, 160, 100, '#8e3b46')
       ctx.fillStyle = floorPattern('carpet', '#8e3b46')
       ctx.fillRect(8, 48, 160, 100)
@@ -971,6 +973,35 @@ function resetsIn(at, now) {
   if (minutes < 24 * 60) return `in ${Math.floor(minutes / 60)}h ${minutes % 60}m`
   const date = new Date(Math.round(when / 60000) * 60000)
   return `${DAYS[date.getDay()]} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
+}
+
+const usagePeak = now => Math.max(0, ...usageRows(now).map(row => row.percentUsed))
+const REDUCED_MOTION = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
+/** The alarm's beat once a limit is spent: a soft flash a little under once a second, held still for reduced motion. */
+const alarmPulse = now => (REDUCED_MOTION ? 0.5 : Math.max(0, Math.sin((now / 1100) * Math.PI * 2)) ** 2)
+
+/** Once a limit is spent, the lamp's light washes over the manager's office, people and all. */
+function drawAlarm(now) {
+  if (usagePeak(now) < 100) return
+  const pulse = alarmPulse(now)
+  if (pulse < 0.02) return
+  const room = ROOMS_LEFT.office
+  const top = room.top * T
+  const w = WALL_L * T
+  const h = room.h * T
+  ctx.save()
+  ctx.beginPath()
+  ctx.rect(0, top, w, h)
+  ctx.clip()
+  ctx.fillStyle = `rgba(255, 36, 36, ${0.14 * pulse})`
+  ctx.fillRect(0, top, w, h)
+  const glow = ctx.createRadialGradient(88, 20, 3, 88, 20, 150)
+  glow.addColorStop(0, `rgba(255, 80, 80, ${0.5 * pulse})`)
+  glow.addColorStop(0.35, `rgba(255, 50, 50, ${0.18 * pulse})`)
+  glow.addColorStop(1, 'rgba(255, 40, 40, 0)')
+  ctx.fillStyle = glow
+  ctx.fillRect(0, top, w, h)
+  ctx.restore()
 }
 
 /** The CONTEXT and USAGE boards; answers where the USAGE board ends. */
@@ -1268,6 +1299,7 @@ function draw() {
   drawBands(now)
   drawOutside()
   drawEntities(now)
+  drawAlarm(now)
 }
 
 function frame() {

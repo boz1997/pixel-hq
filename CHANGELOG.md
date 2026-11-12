@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- **Plan limits on the USAGE board**: the mod reads the desktop app's usage card once a minute, one session for all, and the board shows every limit on it, the per-model weekly one such as Fable included, with when a spent one resets. The red lamp blinks near a limit and stays lit once one is spent. Without a reading the board falls back to the session's own windows.
+- **Plan limits on the USAGE board**: the mod reads the desktop app's usage card once a minute, one session for all, and the board shows every limit on it, the per-model weekly one such as Fable included, with when a spent one resets. The red lamp blinks near a limit; once one is spent it flashes and washes the manager's office in red, held still for reduced motion. Without a reading the board falls back to the session's own windows.
 
 ## 0.2.0 — the office app
 
