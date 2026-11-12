@@ -1,8 +1,8 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
-import type { DeskState, Helper, Live, LogEntry, Office } from '../types'
-import { fetchRoster, fetchSelf, forget, publish, readLives, SESSIONS } from './hq'
+import type { DeskState, Helper, Live, LogEntry, Office, Plan } from '../types'
+import { fetchPlan, fetchRoster, fetchSelf, forget, publish, readLives, readPlan, SESSIONS, sharePlan } from './hq'
 import { ago, buildRooms, clip, detailFor, gist, shownState, verbFor } from './model'
 import type { Desk, Room } from './model'
 import { W, drawOffice, heightOf, summary } from './scene'
@@ -13,6 +13,7 @@ const TICK_MS = 2000
 const HEARTBEAT_EVERY = 10
 const ROSTER_SHOWN_MS = 10_000
 const ROSTER_HIDDEN_MS = 60_000
+const PLAN_MS = 60_000
 
 const EMPTY_ME: Live = {
   id: '',
@@ -109,6 +110,7 @@ const fingerprint = (value: Office, now: number): string =>
     sessions: value.roster?.sessions.map(s => [s.id, s.title, s.groupId, s.isPinned, s.pr?.state]),
     groups: value.roster?.groups,
     note: value.note,
+    plan: value.plan && [value.plan.windows.map(w => [w.label, w.percentUsed, w.resetsAt]), value.plan.extra?.percentUsed],
     mine: shownState(value.me, now),
   })
 
@@ -116,6 +118,22 @@ let ticks = 0
 let rosterAskedAt = 0
 const announced = new Set<string>()
 let rosterAsks = 0
+let planAskedAt = 0
+
+/** The plan's limits: the freshest any session published, read again from the app once a minute. */
+async function planOf($: EngineInterface, now: number, known: Plan | undefined): Promise<Plan | undefined> {
+  const stored = await readPlan($).catch(() => undefined)
+  let plan = stored !== undefined && (known === undefined || stored.at >= known.at) ? stored : known
+  if ((plan === undefined || now - plan.at >= PLAN_MS) && now - planAskedAt >= PLAN_MS) {
+    planAskedAt = now
+    const fetched = await fetchPlan($, now).catch(() => undefined)
+    if (fetched !== undefined) {
+      plan = fetched
+      await sharePlan($, fetched)
+    }
+  }
+  return plan
+}
 
 async function tick($: EngineInterface): Promise<void> {
   ticks += 1
@@ -163,9 +181,10 @@ async function tick($: EngineInterface): Promise<void> {
       note: note ?? null,
     })
   }
-  const next: Office = { ...current, lives, roster, note }
+  const plan = await planOf($, now, current.plan)
+  const next: Office = { ...current, lives, roster, note, plan }
   if (fingerprint(next, now) === fingerprint(current, now)) return
-  await update($, office, value => ({ ...value, lives, roster, note }))
+  await update($, office, value => ({ ...value, lives, roster, note, plan }))
 }
 
 function countsOf(rooms: Room[]): Counts {
@@ -412,7 +431,7 @@ export const register: Register = on => {
     const table = $.ui.resolve(e)
     const { Box, Text, Button, Svg } = table
     const width = Math.max(300, Math.round((e.props.bodyColumns || 80) * 7.5))
-    const view = { rooms, me: value.me, picked: value.picked, counts }
+    const view = { rooms, me: value.me, picked: value.picked, counts, plan: value.plan }
     const height = Math.round((width * heightOf(rooms)) / W)
 
     return (

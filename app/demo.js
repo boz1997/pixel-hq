@@ -65,5 +65,13 @@ export function demoState() {
       log: LOG_TOOLS.map(([tool, v, d], i) => ({ at: now - (LOG_TOOLS.length - i) * 45_000, tool, verb: v, detail: d })),
     }
   }
-  return { at: now, roster: { at: now, groups: GROUPS, sessions }, lives, sources: 0, isDemo: true }
+  const week = new Date(now + 3 * 86400_000).toISOString()
+  const plan = {
+    at: now,
+    windows: [
+      { label: 'Weekly · all models', percentUsed: 62, resetsAt: week },
+      { label: 'Weekly · Fable', percentUsed: 74, resetsAt: week },
+    ],
+  }
+  return { at: now, roster: { at: now, groups: GROUPS, sessions }, lives, plan, sources: 0, isDemo: true }
 }

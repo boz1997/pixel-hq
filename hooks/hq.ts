@@ -1,12 +1,13 @@
 import type { EngineInterface } from 'claude-code'
 
-import type { Live, Roster, RosterGroup, RosterSession } from '../types'
+import type { Live, Plan, PlanWindow, Roster, RosterGroup, RosterSession } from '../types'
 import { norm } from './model'
 
 export const SESSIONS = 'ccd_session_mgmt'
 export const SIDEBAR = 'ccd_sidebar'
 
 const LIVE = 'live:'
+const PLAN = 'plan'
 const DAY_MS = 24 * 60 * 60_000
 
 const asRecord = (value: unknown): Record<string, unknown> =>
@@ -77,6 +78,35 @@ export async function fetchRoster($: EngineInterface, now: number): Promise<Rost
     return session && asRecord(raw).isArchived !== true ? [session] : []
   })
   return { at: now, groups, sessions }
+}
+
+/** The plan's limits as the app's usage card shows them, the per-model weekly ones included; none off a plan. */
+export async function fetchPlan($: EngineInterface, now: number): Promise<Plan | undefined> {
+  const plan = asRecord(asRecord(await mcpJson($, SESSIONS, 'get_usage')).plan)
+  if (plan.status !== 'ok' || !Array.isArray(plan.windows)) return undefined
+  const windows = plan.windows.flatMap((raw: unknown): PlanWindow[] => {
+    const r = asRecord(raw)
+    if (typeof r.label !== 'string' || typeof r.percentUsed !== 'number') return []
+    return [{ label: r.label, percentUsed: r.percentUsed, ...(typeof r.resetsAt === 'string' ? { resetsAt: r.resetsAt } : {}) }]
+  })
+  const extra = asRecord(plan.extraUsage)
+  const isExtraOn = extra.enabled === true && typeof extra.percentUsed === 'number'
+  return { at: now, windows, ...(isExtraOn ? { extra: { percentUsed: extra.percentUsed as number } } : {}) }
+}
+
+const isPlan = (value: unknown): value is Plan => {
+  const r = asRecord(value)
+  return typeof r.at === 'number' && Array.isArray(r.windows)
+}
+
+/** The plan's limits as a session last published them for every office to read. */
+export async function readPlan($: EngineInterface): Promise<Plan | undefined> {
+  const value = await $.store.get(PLAN)
+  return isPlan(value) ? value : undefined
+}
+
+export async function sharePlan($: EngineInterface, plan: Plan): Promise<void> {
+  await $.store.set(PLAN, plan)
 }
 
 const isLive = (value: unknown): value is Live => {

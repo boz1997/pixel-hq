@@ -791,8 +791,7 @@ function screen(state, verb, x, y, t) {
 function drawRoomsLeft(now) {
   const tod = timeOfDay(now)
   const sky = tod === 'night' ? '#1b2440' : tod === 'dusk' ? '#f0b27a' : '#8fc9ea'
-  const limits = Object.values(data.lives).flatMap(l => l.limits ?? [])
-  const isOverLimit = limits.some(l => l.percentUsed >= 90)
+  const peak = Math.max(0, ...usageRows(now).map(row => row.percentUsed))
   for (const [id, room] of Object.entries(ROOMS_LEFT)) {
     floor(0, room.top * T, WALL_L * T, room.h * T, room.floor, room.tint)
     if (room.top > 0) wall(0, room.top * T, (WALL_L + 1) * T, T)
@@ -824,9 +823,9 @@ function drawRoomsLeft(now) {
         ctx.fill()
       }
       clock(58, 22, now)
-      // The red lamp: lit while a rate limit is nearly spent.
+      // The red lamp: blinks while a limit is nearly spent, stays lit once one is.
       rect(84, 16, 8, 8, '#2d3340')
-      rect(85, 17, 6, 6, isOverLimit && Math.floor(now / 500) % 2 === 0 ? '#ff4d4d' : isOverLimit ? '#8a1f1f' : '#3a3f4d')
+      rect(85, 17, 6, 6, peak >= 100 || (peak >= 90 && Math.floor(now / 500) % 2 === 0) ? '#ff4d4d' : peak >= 90 ? '#8a1f1f' : '#3a3f4d')
       rect(8, 48, 160, 100, '#8e3b46')
       ctx.fillStyle = floorPattern('carpet', '#8e3b46')
       ctx.fillRect(8, 48, 160, 100)
@@ -842,9 +841,8 @@ function drawRoomsLeft(now) {
       screen(busy > 0 ? 'working' : 'idle', 'delegating', 3 * T + 38, 4 * T - 7, now)
       rect(3 * T + 18, 4 * T + 26, 28, 6, '#c8971f')
       label('CLAUDE', 3 * T + 32, 4 * T + 31, '#4a2c18', 5, 'center')
-      drawBoards(now)
-      drawBin()
-      sprite(raster(PLANT, PLANT_PALETTE), 150, 130)
+      const binY = drawBin(drawBoards(now))
+      sprite(raster(PLANT, PLANT_PALETTE), 150, Math.max(130, binY + 12))
     }
     if (id === 'meeting') {
       // The projector screen names what the table is working on.
@@ -943,9 +941,41 @@ function drawDoor() {
   label('ENTRANCE', x + 8, y + 8, '#6b6252', 5, 'center')
 }
 
+const LIMIT_NAMES = { five_hour: 'Session', seven_day: 'Weekly', spend_limit: 'Spend' }
+const PLAN_STALE_MS = 30 * 60_000
+const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+
+/** A window's name on the board: "Weekly · all models" is Weekly, "Weekly · Fable" is Fable. */
+function windowName(text) {
+  const [head = '', tail] = String(text).split('·').map(part => part.trim())
+  const name = tail === undefined || /^all\b/i.test(tail) ? head || String(text) : tail
+  return name.length > 9 ? `${name.slice(0, 8)}…` : name
+}
+
+/** The USAGE board's rows: the plan's limits, per model too, while fresh; else the sessions' own windows. */
+function usageRows(now) {
+  const plan = data.plan
+  if (plan && Array.isArray(plan.windows) && plan.windows.length > 0 && now - plan.at < PLAN_STALE_MS) {
+    const rows = plan.windows.map(w => ({ name: windowName(w.label), percentUsed: w.percentUsed, resetsAt: w.resetsAt }))
+    return plan.extra ? [...rows, { name: 'Extra', percentUsed: plan.extra.percentUsed }] : rows
+  }
+  const withLimits = Object.values(data.lives).sort((a, b) => b.at - a.at).find(l => (l.limits ?? []).length > 0)
+  return (withLimits?.limits ?? []).map(l => ({ name: LIMIT_NAMES[l.kind] ?? l.kind, percentUsed: l.percentUsed, resetsAt: l.resetsAt }))
+}
+
+/** When a window resets: "in 4h 50m" within a day, else "Fri 14:00". */
+function resetsIn(at, now) {
+  const when = Date.parse(at)
+  if (Number.isNaN(when)) return ''
+  const minutes = Math.max(0, Math.round((when - now) / 60000))
+  if (minutes < 24 * 60) return `in ${Math.floor(minutes / 60)}h ${minutes % 60}m`
+  const date = new Date(Math.round(when / 60000) * 60000)
+  return `${DAYS[date.getDay()]} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
+}
+
+/** The CONTEXT and USAGE boards; answers where the USAGE board ends. */
 function drawBoards(now) {
   const fresh = [...Object.values(data.lives)].sort((a, b) => b.at - a.at)
-  const withLimits = fresh.find(l => (l.limits ?? []).length > 0)
   const picked = selected ? fresh.find(l => keyOf(l) === selected) : undefined
   const focus = picked ?? fresh[0]
   const board = (x, y, w, h, title) => {
@@ -963,26 +993,34 @@ function drawBoards(now) {
   board(118, 20, 48, 30, 'CONTEXT')
   label(focus?.context === undefined ? '—' : `${focus.context}%`, 121, 38, '#ef8a3a', 10)
   bar(121, 43, 42, focus?.context ?? 0, '#5b8def')
-  board(118, 56, 48, 34, 'USAGE')
-  const limits = (withLimits?.limits ?? []).slice(0, 2)
-  if (limits.length === 0) label('no reading', 121, 74, '#8a8fa6', 5)
-  limits.forEach((limit, i) => {
-    const top = 56 + 10 + i * 12
-    const name = { five_hour: 'Session', seven_day: 'Weekly', spend_limit: 'Spend' }[limit.kind] ?? limit.kind
-    label(`${name} ${limit.percentUsed}%`, 121, top + 4, '#e6e8ef', 5)
-    bar(121, top + 6, 42, limit.percentUsed, limit.percentUsed >= 90 ? '#e5534b' : '#5b8def')
+  const rows = usageRows(now).slice(0, 3)
+  const heights = rows.map(row => (row.percentUsed >= 90 && row.resetsAt ? 17 : 11))
+  const h = rows.length === 0 ? 34 : 11 + heights.reduce((sum, one) => sum + one, 0)
+  board(118, 56, 48, h, 'USAGE')
+  if (rows.length === 0) label('no reading', 121, 74, '#8a8fa6', 5)
+  let top = 66
+  rows.forEach((row, i) => {
+    const isHigh = row.percentUsed >= 90
+    label(row.name, 121, top + 4, '#e6e8ef', 5)
+    label(`${row.percentUsed}%`, 163, top + 4, isHigh ? '#ff6b6b' : '#e6e8ef', 5, 'right')
+    bar(121, top + 6, 42, row.percentUsed, isHigh ? '#e5534b' : '#5b8def')
+    if (isHigh && row.resetsAt) label(`resets ${resetsIn(row.resetsAt, now)}`, 121, top + 15, '#f2a7a3', 4, 'left', '500')
+    top += heights[i]
   })
+  return 56 + h
 }
 
-function drawBin() {
+/** The bin under the USAGE board; answers where it stands. */
+function drawBin(below) {
   const fresh = [...Object.values(data.lives)].sort((a, b) => b.at - a.at)
   const picked = selected ? fresh.find(l => keyOf(l) === selected) : undefined
   const balls = Math.min(6, Math.round(((picked ?? fresh[0])?.context ?? 0) / 17))
   const x = 9 * T + 3
-  const y = 6 * T + 4
+  const y = Math.max(6 * T + 4, below + 6)
   rect(x, y, 10, 9, '#5c6270')
   rect(x + 1, y + 1, 8, 7, '#2d3340')
   for (let i = 0; i < balls; i++) rect(x + 1.5 + (i % 3) * 2.5, y + 6 - Math.floor(i / 3) * 2.5, 2, 2, '#f4f5f8')
+  return y
 }
 
 /** The things on a desk, two of them, picked by the session's id. */

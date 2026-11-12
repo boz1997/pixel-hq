@@ -1,4 +1,4 @@
-import type { DeskState, Helper, Live, Roster, RosterSession } from '../types'
+import type { DeskState, Helper, Limit, Live, Plan, Roster, RosterSession } from '../types'
 
 /** A live entry older than this is a session nobody is in: its desk is empty. */
 export const STALE_MS = 75_000
@@ -209,8 +209,27 @@ export function resets(at: string | undefined, now: number): string {
   if (Number.isNaN(when)) return ''
   const minutes = Math.max(0, Math.round((when - now) / 60000))
   if (minutes < 24 * 60) return `${Math.floor(minutes / 60)}h ${minutes % 60}m`
-  const date = new Date(when)
+  const date = new Date(Math.round(when / 60000) * 60000)
   return `${DAYS[date.getDay()]} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
+}
+
+const PLAN_STALE_MS = 30 * 60_000
+
+export type UsageRow = { name: string; percentUsed: number; resetsAt?: string }
+
+/** A window's name on the board: "Weekly · all models" is Weekly, "Weekly · Fable" is Fable. */
+export function windowName(label: string): string {
+  const [head = '', tail] = label.split('·').map(part => part.trim())
+  return clip(tail === undefined || /^all\b/i.test(tail) ? head || label : tail, 10)
+}
+
+/** The USAGE board's rows: the plan's limits, per model too, while fresh; else the session's own windows. */
+export function usageRows(plan: Plan | undefined, limits: Limit[] | undefined, now: number): UsageRow[] {
+  if (plan !== undefined && plan.windows.length > 0 && now - plan.at < PLAN_STALE_MS) {
+    const rows: UsageRow[] = plan.windows.map(w => ({ name: windowName(w.label), percentUsed: w.percentUsed, resetsAt: w.resetsAt }))
+    return plan.extra ? [...rows, { name: 'Extra', percentUsed: plan.extra.percentUsed }] : rows
+  }
+  return (limits ?? []).map(l => ({ name: LIMIT_NAMES[l.kind] ?? l.kind, percentUsed: l.percentUsed, resetsAt: l.resetsAt }))
 }
 
 export function ago(ms: number): string {

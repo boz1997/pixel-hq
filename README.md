@@ -11,7 +11,7 @@ One command runs it on your machine; your phone opens it over the same Wi-Fi. No
 - **A desk per session, a room per sidebar group.** The office is your sidebar: custom groups in their order, then PINNED and a LOBBY for the rest. Fold a room you rarely look at from its header.
 - **People go where the work is.** At the desk for code and terminals (the screen shows what runs), in the **library** for the web, in the **studio** for images and pages, at the **café** after a while idle (chatting, sipping, scrolling), off to the **WC** now and then. New sessions walk in through the entrance; closed ones walk out and leave a coat on the chair.
 - **Subagents are real people.** They sit at the meeting table while they run, the projector shows what they are on, and when they finish they carry their paper to their session's desk, hand it over and leave.
-- **The manager keeps score.** Claude's corner office has the CONTEXT and USAGE boards, a bin that fills with context, a clock on real time and a red lamp for a rate limit about to run out.
+- **The manager keeps score.** Claude's corner office has the CONTEXT board and the USAGE board, which shows your plan's limits as the app's usage card does, the per-model weekly one (such as Fable) included, and when a spent one comes back. A bin fills with context, a clock runs on real time, and a red lamp blinks when a limit is nearly spent and stays lit once one is.
 - **Things happen.** Confetti when a turn finishes, smoke when it fails, a party at the café when a pull request merges, a `!` bounce when a session needs your answer, a ticker of the latest tool calls of every session under the office.
 - **A place, not a chart.** Plank, checker, tile and carpet floors, posters, reading lamps, an espresso machine with steam, two things on every desk picked by the session, papers that pile up, lamps and screens that glow at night, and a dog that wanders.
 - **Calm or lively**, your pick: calm keeps everyone at their desk, like a status board; lively lets the office live.
@@ -56,7 +56,7 @@ npx github:boz1997/pixel-hq
 
 ## How it knows
 
-The mod is a Claude Code plugin of function hooks: it hears each session's tool calls, turns, subagents, permission dialogs and rate-limit readings, and publishes a small record of that session (its state, its current tool, its subagents, its last twenty calls) to `~/.claude/plugins/store/`. It also publishes what the desktop app says about the sidebar: the groups and the sessions in them. The app merges those records and draws the office; everything that moves, from the walking to the café chats, is decided in the browser.
+The mod is a Claude Code plugin of function hooks: it hears each session's tool calls, turns, subagents, permission dialogs and rate-limit readings, and publishes a small record of that session (its state, its current tool, its subagents, its last twenty calls) to `~/.claude/plugins/store/`. It also publishes what the desktop app says about the sidebar (the groups and the sessions in them) and about your plan's limits (its usage card, read once a minute by one session for all). The app merges those records and draws the office; everything that moves, from the walking to the café chats, is decided in the browser.
 
 ## Develop
 

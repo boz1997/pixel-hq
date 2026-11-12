@@ -13,6 +13,12 @@ export type Helper = {
 
 export type Limit = { kind: string; percentUsed: number; resetsAt?: string }
 
+/** One limit of the plan as the app's usage card shows it: "Weekly · all models", "Weekly · Fable". */
+export type PlanWindow = { label: string; percentUsed: number; resetsAt?: string }
+
+/** The account's plan limits, per model too, as the desktop app reads them; one session publishes them for all. */
+export type Plan = { at: number; windows: PlanWindow[]; extra?: { percentUsed: number } }
+
 /** One tool call of the session or of one of its subagents (`who`), for the activity log. */
 export type LogEntry = { at: number; tool: string; verb: string; detail: string; who?: string }
 
@@ -59,6 +65,7 @@ export type Office = {
   me: Live
   lives: Record<string, Live>
   roster?: Roster
+  plan?: Plan
   note?: string
   picked?: string
   isAsking?: boolean

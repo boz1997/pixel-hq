@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **Plan limits on the USAGE board**: the mod reads the desktop app's usage card once a minute, one session for all, and the board shows every limit on it, the per-model weekly one such as Fable included, with when a spent one resets. The red lamp blinks near a limit and stays lit once one is spent. Without a reading the board falls back to the session's own windows.
+
 ## 0.2.0 — the office app
 
 - **The office app**: `npx github:boz1997/pixel-hq` runs a local viewer at port 2323, opens it in a window of its own (a Chromium app-mode window where one is installed, `--browser` for a plain tab) and prints the address your phone can open on the same Wi-Fi. `--password` locks it, `--local-only` keeps it to this computer, `--demo` shows a made-up office, a taken port is skipped for the next one.

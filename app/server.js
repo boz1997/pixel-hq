@@ -36,6 +36,7 @@ function storeFiles() {
 export function readState() {
   const lives = {}
   let roster = null
+  let plan = null
   const files = storeFiles()
   for (const file of files) {
     let store
@@ -52,9 +53,12 @@ export function readState() {
       if (key === 'roster' && value && typeof value === 'object' && Array.isArray(value.sessions)) {
         if (!roster || (value.at ?? 0) > (roster.at ?? 0)) roster = value
       }
+      if (key === 'plan' && value && typeof value === 'object' && Array.isArray(value.windows)) {
+        if (!plan || (value.at ?? 0) > (plan.at ?? 0)) plan = value
+      }
     }
   }
-  return { at: Date.now(), roster, lives, sources: files.length }
+  return { at: Date.now(), roster, lives, plan, sources: files.length }
 }
 
 function send(res, status, type, body) {

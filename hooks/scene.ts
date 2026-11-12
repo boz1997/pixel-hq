@@ -1,6 +1,6 @@
-import type { DeskState, Live } from '../types'
+import type { DeskState, Live, Plan } from '../types'
 import type { Desk, Room } from './model'
-import { LIMIT_NAMES, ago, clip, hash, resets } from './model'
+import { ago, clip, hash, resets, usageRows } from './model'
 import {
   BASE_PALETTE, CHAIR, CHAIR_PALETTE, CHECK, CLAUDE, CROWN, DOG, DOG_PALETTE, HAIRS, HAIR_STYLES, HATS, HAT_COLORS,
   HAT_NAMES, INK, MASCOT, MINI, PERSON, PLANT, PLANT_PALETTE, SHIRTS, SKINS,
@@ -32,7 +32,7 @@ const DOTS: Record<DeskState, string> = {
 
 export type Counts = { desks: number; present: number; working: number; waiting: number }
 
-export type View = { rooms: Room[]; me: Live; picked?: string; counts: Counts }
+export type View = { rooms: Room[]; me: Live; picked?: string; counts: Counts; plan?: Plan }
 
 const esc = (text: string): string => text.replace(/[&<>"']/g, ch => `&#${ch.charCodeAt(0)};`)
 
@@ -463,21 +463,22 @@ function contextBoard(me: Live, x: number, y: number): string {
   )
 }
 
-function limitsBoard(me: Live, now: number, x: number, y: number): string {
+function limitsBoard(me: Live, plan: Plan | undefined, now: number, x: number, y: number): string {
   const w = 50
-  const limits = (me.limits ?? []).slice(0, 2)
-  const rows = limits
-    .map((limit, i) => {
+  const rows = usageRows(plan, me.limits, now).slice(0, 3)
+  const body = rows
+    .map((row, i) => {
       const top = y + 11 + i * 15
+      const isHigh = row.percentUsed >= 90
       return (
-        text(x + 4, top + 3, 4.4, '#e6e8ef', LIMIT_NAMES[limit.kind] ?? limit.kind, ' font-weight="600"') +
-        text(x + w - 4, top + 3, 4.4, '#e6e8ef', `${limit.percentUsed}%`, ' text-anchor="end"') +
-        bar(x + 4, top + 5, w - 8, limit.percentUsed, limit.percentUsed >= 90 ? '#e5534b' : '#5b8def') +
-        text(x + 4, top + 12.5, 3.8, '#8a8fa6', resets(limit.resetsAt, now))
+        text(x + 4, top + 3, 4.4, '#e6e8ef', row.name, ' font-weight="600"') +
+        text(x + w - 4, top + 3, 4.4, isHigh ? '#ff6b6b' : '#e6e8ef', `${row.percentUsed}%`, ' text-anchor="end"') +
+        bar(x + 4, top + 5, w - 8, row.percentUsed, isHigh ? '#e5534b' : '#5b8def') +
+        text(x + 4, top + 12.5, 3.8, isHigh ? '#f2a7a3' : '#8a8fa6', resets(row.resetsAt, now))
       )
     })
     .join('')
-  return board(x, y, w, 40, 'USAGE') + (rows || text(x + 4, y + 22, 4.4, '#8a8fa6', 'no reading yet'))
+  return board(x, y, w, Math.max(40, 10 + rows.length * 15), 'USAGE') + (body || text(x + 4, y + 22, 4.4, '#8a8fa6', 'no reading yet'))
 }
 
 function hqBand(view: View, now: number): string {
@@ -527,7 +528,7 @@ function hqBand(view: View, now: number): string {
     `<g transform="translate(38 20)">${bubble(0, 1, clip(says, 19), mood === 'waiting' ? '#fff1c2' : '#ffffff', mood === 'waiting' ? '#7a4d00' : '#333333')}</g>` +
     tag(53, 82, 'Claude · manager', DOTS[mood], false) +
     contextBoard(me, 112, 24) +
-    limitsBoard(me, now, 172, 24) +
+    limitsBoard(me, view.plan, now, 172, 24) +
     use('hq-plant', W - M - 12, HQ_H - 14) +
     bin(me.context, 104, 68) +
     `<g class="hq-dog"><g transform="translate(118 ${HQ_H - 10})">${use('hq-dog', 0, 0)}</g></g>` +
