@@ -22,6 +22,9 @@ export type Plan = { at: number; windows: PlanWindow[]; extra?: { percentUsed: n
 /** One tool call of the session or of one of its subagents (`who`), for the activity log. */
 export type LogEntry = { at: number; tool: string; verb: string; detail: string; who?: string }
 
+/** The API error a turn of the session last died on, in Claude Code's word for it: `overloaded`, `server_error`, `rate_limit`... */
+export type Trouble = { at: number; error: string; detail: string }
+
 /** One session as its own mod instance publishes it to the shared store. */
 export type Live = {
   id: string
@@ -40,6 +43,7 @@ export type Live = {
   helpers: Helper[]
   context?: number
   limits?: Limit[]
+  trouble?: Trouble
   turns: number
   log: LogEntry[]
 }

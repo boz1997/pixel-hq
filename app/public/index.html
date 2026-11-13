@@ -15,6 +15,13 @@
   #top .modes { margin-left: auto; display: flex; gap: 4px; }
   #top .modes button { font: inherit; font-size: 12px; padding: 3px 10px; border-radius: 6px; border: 1px solid #3d4258; background: #1f2130; color: #8a8fa6; cursor: pointer; }
   #top .modes button.on { background: #3d6fd6; border-color: #3d6fd6; color: #fff; }
+  #outage { display: flex; gap: 10px; align-items: center; padding: 8px 14px; background: #b3261e; color: #fff; font-weight: 700; letter-spacing: 0.5px; animation: outage 0.75s ease-in-out infinite alternate; }
+  #outage[hidden] { display: none; }
+  #outage.slow { background: #8a6d00; animation: none; }
+  #outage a { color: #fff; margin-left: auto; font-weight: 400; }
+  #outage a[hidden] { display: none; }
+  @keyframes outage { from { background: #b3261e; } to { background: #e5534b; } }
+  @media (prefers-reduced-motion: reduce) { #outage { animation: none; } }
   #wrap { display: flex; align-items: flex-start; }
   #stage { flex: 1; overflow: auto; padding: 12px; }
   canvas { display: block; image-rendering: pixelated; image-rendering: crisp-edges; width: 100%; max-width: 1536px; margin: 0 auto; background: #4b3a2f; border: 2px solid #2d2a3a; }
@@ -65,6 +72,7 @@
     <button id="mode-calm">calm</button><button id="mode-lively">lively</button>
   </span>
 </div>
+<div id="outage" role="alert" hidden><span>⚠</span><span id="outage-text"></span><a id="outage-link" href="https://status.claude.com" target="_blank" rel="noopener">status.claude.com</a></div>
 <div id="wrap">
   <div id="stage">
     <canvas id="office" width="768" height="672"></canvas>

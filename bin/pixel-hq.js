@@ -10,7 +10,7 @@ const flag = name => {
 if (args.includes('--help') || args.includes('-h')) {
   console.log(`pixel-hq: the office of your Claude Code sessions, in your browser and on your phone.
 
-  pixel-hq [--port 2323] [--browser] [--no-open] [--demo] [--password secret] [--local-only]
+  pixel-hq [--port 2323] [--browser] [--no-open] [--demo] [--password secret] [--local-only] [--no-status]
 
   --port        the port (default 2323)
   --browser     open an ordinary browser tab instead of a window of its own
@@ -18,6 +18,7 @@ if (args.includes('--help') || args.includes('-h')) {
   --demo        show a made-up office instead of your sessions
   --password    ask for this password before showing the office (also read from PIXEL_HQ_PASSWORD)
   --local-only  listen on this computer only, not on the Wi-Fi
+  --no-status   do not ask status.claude.com whether Claude is down (the office then panics only on your sessions' own errors)
 `)
   process.exit(0)
 }
@@ -29,4 +30,5 @@ startServer({
   demo: args.includes('--demo'),
   password: flag('--password') ?? process.env.PIXEL_HQ_PASSWORD,
   host: args.includes('--local-only') ? '127.0.0.1' : '0.0.0.0',
+  status: !args.includes('--no-status'),
 })

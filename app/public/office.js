@@ -62,6 +62,8 @@ const POSTERS = [
   { title: 'SHIP IT', color: '#4f7cc9' }, { title: 'FOCUS', color: '#3f9a68' }, { title: 'TEA TIME', color: '#e08a2b' },
   { title: 'NO BUGS', color: '#c95a4a' }, { title: 'DEPLOY', color: '#8a6fd1' }, { title: 'READ ME', color: '#2fa3a0' },
 ]
+const PANIC = ['!!', 'AAA!', '503?!', 'is it down?', 'retry!', 'the API!', 'overloaded?!', 'refresh!!', 'help!', 'who pushed?', 'status page!']
+const PANIC_BOSS = ['STAY CALM!', 'checking status…', 'everyone, breathe', 'who broke it?!']
 const CONFETTI = ['#e0484d', '#f2c037', '#3ecf6e', '#3d6fd6', '#d46a9a', '#ffffff']
 
 function range(a, b) {
@@ -120,6 +122,43 @@ document.getElementById(prefs.mode === 'calm' ? 'mode-calm' : 'mode-lively').cla
 let data = { at: 0, roster: null, lives: {} }
 let fetchedAt = 0
 let isLocked = false
+
+const OUTAGE_ERRORS = new Set(['overloaded', 'server_error'])
+const TROUBLE_MS = 10 * 60_000
+const STATUS_STALE_MS = 10 * 60_000
+const STATUS_PAGE = 'https://status.claude.com'
+const IS_DRILL = new URLSearchParams(location.search).has('outage')
+let outage = null
+
+/**
+ * Whether Claude is in trouble: `down` while the status page reports an outage or a major incident on Claude Code or
+ * the API, or sessions keep dying on overloaded and server errors; `slow` for a lesser incident. `?outage` runs a drill.
+ */
+function outageOf(now) {
+  if (IS_DRILL) return { level: 'down', title: 'fire drill: this is what an outage looks like', link: null }
+  const status = data.status && now - data.status.at < STATUS_STALE_MS ? data.status : null
+  const incident = status?.incidents?.find(i => i.impact === 'major' || i.impact === 'critical')
+  const broken = status?.components?.find(c => c.status === 'major_outage' || c.status === 'partial_outage')
+  const failing = Object.values(data.lives).filter(l => l.trouble && OUTAGE_ERRORS.has(l.trouble.error) && now - l.trouble.at < TROUBLE_MS)
+  if (incident || broken || failing.length > 0) {
+    const title = incident?.name ?? (broken ? `${broken.name}: ${broken.status.replace(/_/g, ' ')}` : `${failing.length} session${failing.length === 1 ? '' : 's'} hit ${failing[0].trouble.error.replace(/_/g, ' ')}`)
+    return { level: 'down', title, link: incident || broken ? STATUS_PAGE : null }
+  }
+  const minor = status?.incidents?.[0]
+  const degraded = status?.components?.find(c => c.status === 'degraded_performance')
+  if (minor || degraded) return { level: 'slow', title: minor?.name ?? `${degraded.name}: degraded performance`, link: STATUS_PAGE }
+  return null
+}
+
+function showOutage() {
+  const box = document.getElementById('outage')
+  box.hidden = !outage
+  document.title = outage?.level === 'down' ? '🚨 Pixel HQ' : 'Pixel HQ'
+  if (!outage) return
+  box.classList.toggle('slow', outage.level === 'slow')
+  document.getElementById('outage-text').textContent = `${outage.level === 'down' ? 'ALARM' : 'Heads up'} · ${outage.title}`
+  document.getElementById('outage-link').hidden = !outage.link
+}
 
 async function poll() {
   try {
@@ -352,7 +391,8 @@ function step(entity, dt) {
     entity.isWalking = false
     return
   }
-  let budget = SPEED * Math.min(dt, 3)
+  const speed = speedOf(entity)
+  let budget = speed * Math.min(dt, 3)
   while (budget > 0 && entity.path.length > 0) {
     const next = centerOf(entity.path[0])
     const dx = next.x - entity.x
@@ -371,8 +411,11 @@ function step(entity, dt) {
     }
   }
   entity.isWalking = entity.path.length > 0
-  entity.frame += Math.max(1, Math.round(dt * 60))
+  entity.frame += Math.max(1, Math.round((dt * 60 * speed) / SPEED))
 }
+
+/** Twice as fast and then some while the office panics. */
+const speedOf = entity => (entity.dest === 'panic' || (outage?.level === 'down' && (entity.kind === 'manager' || entity.kind === 'dog')) ? SPEED * 2.2 : SPEED)
 
 const arrived = entity => entity.path.length === 0 && entity.goal && entity.tile[0] === entity.goal[0] && entity.tile[1] === entity.goal[1]
 
@@ -381,6 +424,7 @@ function wantedZone(w, now) {
   const live = w.session.live
   const st = w.session.state
   if (st === 'away') return 'exit'
+  if (outage?.level === 'down' && prefs.mode !== 'calm') return 'panic'
   if (prefs.mode === 'calm') return 'desk'
   if (w.hidden) return 'wc'
   if (st === 'working' && live?.verb === 'browsing') return 'library'
@@ -402,6 +446,14 @@ function wantedZone(w, now) {
 
 function goTo(entity, zone, ownerKey) {
   if (entity.dest === zone && entity.goal) return
+  if (zone === 'panic') {
+    leaveSeat(entity)
+    entity.hidden = false
+    entity.wcDone = true
+    entity.dest = 'panic'
+    runAround(entity)
+    return
+  }
   leaveSeat(entity)
   let tile = null
   if (zone === 'desk') tile = layout.desks.get(ownerKey)?.stand ?? null
@@ -434,13 +486,31 @@ function goTo(entity, zone, ownerKey) {
   } else walkTo(entity, tile)
 }
 
+let freeTiles = { layout: null, tiles: [] }
+
+/** Somewhere to run to: a free tile not too far off, so the panic stays in view. */
+function panicTile(entity) {
+  if (freeTiles.layout !== layout) {
+    const tiles = []
+    for (let r = 0; r < layout.ROWS; r++) for (let c = 0; c < COLS; c++) if (isFree(c, r)) tiles.push([c, r])
+    freeTiles = { layout, tiles }
+  }
+  const [c0, r0] = entity.tile
+  const near = freeTiles.tiles.filter(([c, r]) => Math.abs(c - c0) + Math.abs(r - r0) <= 14)
+  return pick(near.length > 0 ? near : freeTiles.tiles)
+}
+
+const runAround = entity => walkTo(entity, panicTile(entity))
+
 function burst(x, y, kind) {
-  const n = kind === 'confetti' ? 26 : 14
+  const n = kind === 'confetti' ? 26 : kind === 'paper' ? 4 : 14
   for (let i = 0; i < n; i++) {
     particles.push(
       kind === 'confetti'
         ? { x, y, vx: rnd(-50, 50), vy: rnd(-130, -50), g: 170, color: pick(CONFETTI), life: rnd(1.0, 1.7), age: 0, size: 2 }
-        : { x: x + rnd(-4, 4), y, vx: rnd(-8, 8), vy: rnd(-28, -12), g: -6, color: pick(['#e5534b', '#8a8a8a', '#5c5c5c', '#c0392b']), life: rnd(1.2, 2.0), age: 0, size: rnd(2, 4) },
+        : kind === 'paper'
+          ? { x, y, vx: rnd(-45, 45), vy: rnd(-70, -25), g: 90, color: pick(['#ffffff', '#f4f5f8', '#e6e8ef']), life: rnd(0.8, 1.4), age: 0, size: 2 }
+          : { x: x + rnd(-4, 4), y, vx: rnd(-8, 8), vy: rnd(-28, -12), g: -6, color: pick(['#e5534b', '#8a8a8a', '#5c5c5c', '#c0392b']), life: rnd(1.2, 2.0), age: 0, size: rnd(2, 4) },
     )
   }
 }
@@ -509,7 +579,7 @@ function syncEntities(sessions) {
       }
       e.helper = h
       if (h.isDone && e.phase === 'working') e.phase = 'delivering'
-      if (e.phase === 'working') goTo(e, prefs.mode === 'calm' ? 'side' : 'meeting', s.id)
+      if (e.phase === 'working') goTo(e, outage?.level === 'down' && prefs.mode !== 'calm' ? 'panic' : prefs.mode === 'calm' ? 'side' : 'meeting', s.id)
       else if (e.phase === 'delivering') goTo(e, 'side', s.id)
     }
     for (const [id, e] of helpers) {
@@ -562,6 +632,14 @@ function behave(now) {
       workers.delete(w.id)
       if (selected === w.id) select(null)
     }
+    if (w.dest === 'panic') {
+      if (w.path.length === 0) runAround(w)
+      if (now > (w.panicSayAt ?? 0)) {
+        w.bubble = { text: pick(PANIC), color: '#ffe1de', ink: '#9b1c13', until: now + 1600 }
+        w.panicSayAt = now + rnd(1800, 4200)
+      }
+      if (Math.random() < 0.004) burst(w.x, w.y - 8, 'paper')
+    }
     if (w.dest === 'cafe' && arrived(w) && now > w.sayAt) {
       w.bubble = { text: pick(CHAT), color: '#ffffff', ink: '#333', until: now + 3500 }
       w.sayAt = now + rnd(6000, 20000)
@@ -575,6 +653,8 @@ function behave(now) {
     }
   }
   for (const [id, e] of helpers) {
+    if (e.dest === 'panic' && e.path.length === 0) runAround(e)
+    if (e.phase === 'leaving' && !e.goal) goTo(e, 'exit', e.owner)
     if (e.phase === 'delivering' && arrived(e)) {
       if (!e.deliveredAt) e.deliveredAt = now
       if (now - e.deliveredAt > DELIVER_MS) {
@@ -588,7 +668,10 @@ function behave(now) {
       helpers.delete(id)
     }
   }
-  if (manager && now > manager.nextWalk && manager.path.length === 0) {
+  if (manager && outage?.level === 'down' && manager.path.length === 0) {
+    walkTo(manager, [Math.floor(rnd(1, 10)), Math.floor(rnd(5, 9))])
+    manager.nextWalk = now + rnd(4000, 9000)
+  } else if (manager && now > manager.nextWalk && manager.path.length === 0) {
     const home = manager.tile[0] === manager.home[0] && manager.tile[1] === manager.home[1]
     walkTo(manager, home ? [8, 7] : manager.home)
     manager.nextWalk = now + (home ? 6000 : rnd(40_000, 90_000))
@@ -599,7 +682,7 @@ function behave(now) {
     for (let r = 33; r <= 37; r++) for (let c = 0; c <= 10; c++) if (isFree(c, r)) spots.push([c, r])
     for (let r = 6; r <= 8; r++) for (let c = 7; c <= 10; c++) if (isFree(c, r)) spots.push([c, r])
     walkTo(dog, pick(spots))
-    dog.nextMove = now + rnd(3000, 9000)
+    dog.nextMove = now + (outage?.level === 'down' ? rnd(200, 700) : rnd(3000, 9000))
   }
 }
 
@@ -1004,6 +1087,26 @@ function drawAlarm(now) {
   ctx.restore()
 }
 
+/** While Claude is down the whole office flashes red, a little faster than the limit alarm, under sirens along the hall. */
+function drawOutage(now) {
+  if (outage?.level !== 'down') return
+  const pulse = REDUCED_MOTION ? 0.5 : Math.max(0, Math.sin((now / 750) * Math.PI * 2)) ** 2
+  const w = COLS * T
+  const h = layout.ROWS * T
+  ctx.fillStyle = `rgba(255, 30, 30, ${0.2 * pulse})`
+  ctx.fillRect(0, 0, w, h)
+  const x = (HALL.x0 + (HALL.x1 - HALL.x0 + 1) / 2) * T
+  for (let y = 10; y < h; y += 10 * T) {
+    const glow = ctx.createRadialGradient(x, y, 2, x, y, 90)
+    glow.addColorStop(0, `rgba(255, 70, 70, ${0.4 * pulse})`)
+    glow.addColorStop(1, 'rgba(255, 40, 40, 0)')
+    ctx.fillStyle = glow
+    ctx.fillRect(x - 90, y - 90, 180, 180)
+    rect(x - 4, y - 3, 8, 5, '#2d3340')
+    rect(x - 3, y - 2, 6, 3, pulse > 0.35 ? '#ff4d4d' : '#6e1818')
+  }
+}
+
 /** The CONTEXT and USAGE boards; answers where the USAGE board ends. */
 function drawBoards(now) {
   const fresh = [...Object.values(data.lives)].sort((a, b) => b.at - a.at)
@@ -1193,7 +1296,8 @@ function drawEntities(now) {
         ctx.stroke()
       }
       const top = e.y - 10 - hop - bounce
-      sprite(img, e.x - 5, top, e.dir < 0)
+      const shake = outage?.level === 'down' && prefs.mode === 'calm' && !REDUCED_MOTION ? Math.round(Math.sin(now / 45 + e.x)) : 0
+      sprite(img, e.x - 5 + shake, top, e.dir < 0)
       if (e.pose?.kind === 'stretch') {
         rect(e.x - 5, top - 1, 2, 2, e.look.skin)
         rect(e.x + 3, top - 1, 2, 2, e.look.skin)
@@ -1224,19 +1328,22 @@ function drawEntities(now) {
       if (e.helper?.isFailed) rect(e.x - 1, e.y - 10, 1, 4, '#e5534b')
       if (e.phase === 'working' && arrived(e) && e.helper?.verb) bubble(clip(`${e.helper.verb} ${e.helper.detail ?? ''}`.trim(), 16), e.x, e.y - 7, '#ffffff', '#333')
       if (e.phase === 'delivering' && arrived(e)) bubble('here you go', e.x, e.y - 7, '#e3f6ea', '#1f6b3a')
+      if (e.dest === 'panic') bubble(Math.floor(now / 700 + e.seed) % 2 ? '!!' : '?!', e.x, e.y - 7, '#ffe1de', '#9b1c13')
     } else if (e.kind === 'manager') {
       const busy = [...workers.values()].filter(w => w.session.state === 'working').length
       const waiting = [...workers.values()].filter(w => w.session.state === 'waiting').length
       const hop = busy > 0 && !walking ? Math.round(Math.abs(Math.sin(now / 180))) : 0
       shadow(e.x, e.y + 7.5, 8)
       sprite(mascot(walking && Math.floor(e.frame / 8) % 2 === 0), e.x - 8, e.y - 7 - hop, e.dir < 0)
-      const says = waiting > 0 ? `${waiting} need${waiting === 1 ? 's' : ''} you` : busy > 0 ? `${busy} at work` : workers.size > 0 ? 'all quiet' : 'nobody in yet'
-      bubble(says, e.x, e.y - 12, waiting > 0 ? '#fff1c2' : '#ffffff', waiting > 0 ? '#7a4d00' : '#333')
+      const isPanic = outage?.level === 'down'
+      const says = isPanic ? PANIC_BOSS[Math.floor(now / 2200) % PANIC_BOSS.length] : waiting > 0 ? `${waiting} need${waiting === 1 ? 's' : ''} you` : busy > 0 ? `${busy} at work` : workers.size > 0 ? 'all quiet' : 'nobody in yet'
+      bubble(says, e.x, e.y - 12, isPanic ? '#ffe1de' : waiting > 0 ? '#fff1c2' : '#ffffff', isPanic ? '#9b1c13' : waiting > 0 ? '#7a4d00' : '#333')
       tag('Claude · manager', e.x, e.y + 14, DOTS[waiting > 0 ? 'waiting' : busy > 0 ? 'working' : 'idle'], false)
     } else if (e.kind === 'dog') {
       const f = walking ? Math.floor(e.frame / 5) % 4 : 0
       shadow(e.x, e.y + 8, 6)
       sprite(raster(DOG[f], DOG_PALETTE, `dog${f}`), e.x - 7, e.y + 1, e.dir < 0)
+      if (outage?.level === 'down' && Math.floor(now / 900) % 3 === 0) bubble('woof!', e.x, e.y - 2, '#ffffff', '#333')
     }
   }
   for (const p of particles) {
@@ -1251,6 +1358,7 @@ function bubbleText(w, now) {
   const live = s.live
   if (w.bubble && now < w.bubble.until) return { text: w.bubble.text, fill: w.bubble.color, ink: w.bubble.ink }
   if (w.isWalking) return null
+  if (outage?.level === 'down' && prefs.mode === 'calm' && s.state !== 'away') return { text: PANIC[(Math.floor(now / 2500) + hash(w.id)) % PANIC.length], fill: '#ffe1de', ink: '#9b1c13' }
   switch (s.state) {
     case 'working': {
       const line = live?.detail ? `${live.verb} ${live.detail}` : live?.verb ?? ''
@@ -1260,8 +1368,10 @@ function bubbleText(w, now) {
       return { text: clip(`! ${live?.detail || 'needs you'}`, 22), fill: '#fff1c2', ink: '#7a4d00' }
     case 'done':
       return { text: clip(`✓ ${live?.detail || 'done'}`, 22), fill: '#e3f6ea', ink: '#1f6b3a' }
-    case 'failed':
-      return { text: clip(`✗ ${live?.detail || 'failed'}`, 22), fill: '#fde3e1', ink: '#8b2b24' }
+    case 'failed': {
+      const why = live?.trouble && now - live.trouble.at < TROUBLE_MS ? live.trouble.error.replace(/_/g, ' ') : live?.detail
+      return { text: clip(`✗ ${why || 'failed'}`, 22), fill: '#fde3e1', ink: '#8b2b24' }
+    }
     default:
       return null
   }
@@ -1300,6 +1410,7 @@ function draw() {
   drawOutside()
   drawEntities(now)
   drawAlarm(now)
+  drawOutage(now)
 }
 
 function frame() {
@@ -1310,6 +1421,8 @@ function frame() {
 // ------------------------------------------------------------------ the data arriving
 
 function onData() {
+  outage = outageOf(Date.now())
+  showOutage()
   const sessions = sessionsOf()
   const next = buildLayout(sessions)
   if (!layout || next.signature !== layout.signature) {

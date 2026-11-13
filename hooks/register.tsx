@@ -356,12 +356,21 @@ export const register: Register = on => {
     } else {
       const isOk = e.reason === 'answer'
       await setState($, isOk ? 'done' : 'failed', isOk ? 'done' : e.reason, isOk ? gist(e.answer, 40) : e.reason, undefined)
+      if (isOk) await setMe($, () => ({ trouble: undefined }))
     }
     const completed = await next(e)
     if (e.agentId === undefined) void refreshUsage($)
 
     return completed
   })
+
+  // A turn the API killed (retries spent): the office reads overloaded and server errors as Claude being down.
+  on('classic.StopFailure', async ($, e, next) => {
+    const now = await $.clock.now()
+    await setMe($, () => ({ trouble: { at: now, error: String(e.error), detail: clip((e.error_details ?? '').replace(/\s+/g, ' ').trim(), 80) } }))
+
+    return next(e)
+  }).catch(($, e, next) => next(e))
 
   on('session.measure', async ($, e, next) => {
     const percent = e.context.percent

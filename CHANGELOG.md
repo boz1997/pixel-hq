@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **When Claude is down, the office panics**: the app reads Anthropic's public status page once a minute (`--no-status` turns it off) and the mod reports the turns the API killed. On an outage or a major incident on Claude Code or the API, or sessions dying on overloaded and server errors, the office flashes red under sirens, a banner names the incident, and everyone runs around shouting while the manager asks for calm; calm mode keeps them at their desks, shaking. A lesser incident shows a yellow banner alone. `?outage` in the address runs a drill.
 - **Plan limits on the USAGE board**: the mod reads the desktop app's usage card once a minute, one session for all, and the board shows every limit on it, the per-model weekly one such as Fable included, with when a spent one resets. The red lamp blinks near a limit; once one is spent it flashes and washes the manager's office in red, held still for reduced motion. Without a reading the board falls back to the session's own windows.
 
 ## 0.2.0 — the office app

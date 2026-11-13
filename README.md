@@ -4,7 +4,7 @@
 
 ![The office in motion](docs/office.gif)
 
-One command runs it on your machine; your phone opens it over the same Wi-Fi. Nothing leaves your computer.
+One command runs it on your machine; your phone opens it over the same Wi-Fi. Nothing about your sessions leaves your computer.
 
 ## Highlights
 
@@ -13,10 +13,11 @@ One command runs it on your machine; your phone opens it over the same Wi-Fi. No
 - **Subagents are real people.** They sit at the meeting table while they run, the projector shows what they are on, and when they finish they carry their paper to their session's desk, hand it over and leave.
 - **The manager keeps score.** Claude's corner office has the CONTEXT board and the USAGE board, which shows your plan's limits as the app's usage card does, the per-model weekly one (such as Fable) included, and when a spent one comes back. A bin fills with context, a clock runs on real time, and a red lamp blinks when a limit is nearly spent. Once one is spent, the lamp flashes and washes the corner office in red.
 - **Things happen.** Confetti when a turn finishes, smoke when it fails, a party at the café when a pull request merges, a `!` bounce when a session needs your answer, a ticker of the latest tool calls of every session under the office.
+- **When Claude is down, the office panics.** While Anthropic's status page reports an outage or a major incident on Claude Code or the API, or your sessions keep dying on overloaded and server errors, an alarm goes off. The whole office flashes red under sirens, a banner names the incident, and everyone drops what they are doing and runs around shouting; in calm mode they stay at their desks and shake. The manager says to stay calm. The dog does not. Add `?outage` to the address for a fire drill.
 - **A place, not a chart.** Plank, checker, tile and carpet floors, posters, reading lamps, an espresso machine with steam, two things on every desk picked by the session, papers that pile up, lamps and screens that glow at night, and a dog that wanders.
 - **Calm or lively**, your pick: calm keeps everyone at their desk, like a status board; lively lets the office live.
 - **Click anyone** for the session: what it is doing, its subagents, its last twenty tool calls, and a button that opens it in Claude.
-- **Private by design.** A Claude Code plugin (the mod) writes what each session does to a file on your disk; the app reads that file. No account, no server, no telemetry. The mirror on your phone is your own Wi-Fi.
+- **Private by design.** A Claude Code plugin (the mod) writes what each session does to a file on your disk; the app reads that file. No account, no server, no telemetry. The mirror on your phone is your own Wi-Fi, and the one request out is a read of Anthropic's public status page once a minute, which `--no-status` turns off.
 
 ## Get it, in two steps
 
@@ -51,12 +52,13 @@ npx github:boz1997/pixel-hq
 - `--port 5000` picks another port (a taken one is skipped for the next), `--browser` opens a plain tab instead of a window, `--no-open` opens nothing.
 - `--password secret` asks for the password before showing the office; without one, anyone on your network who finds the port can look. `--local-only` listens on this computer alone.
 - `--demo` shows a made-up office, so you can see the app before installing the mod.
+- `--no-status` stops the app asking status.claude.com whether Claude is down; the office then panics only on your sessions' own errors.
 
 ![The office at rest](docs/office.png)
 
 ## How it knows
 
-The mod is a Claude Code plugin of function hooks: it hears each session's tool calls, turns, subagents, permission dialogs and rate-limit readings, and publishes a small record of that session (its state, its current tool, its subagents, its last twenty calls) to `~/.claude/plugins/store/`. It also publishes what the desktop app says about the sidebar (the groups and the sessions in them) and about your plan's limits (its usage card, read once a minute by one session for all). The app merges those records and draws the office; everything that moves, from the walking to the café chats, is decided in the browser.
+The mod is a Claude Code plugin of function hooks: it hears each session's tool calls, turns, subagents, permission dialogs and rate-limit readings, and publishes a small record of that session (its state, its current tool, its subagents, its last twenty calls) to `~/.claude/plugins/store/`. It also publishes what the desktop app says about the sidebar (the groups and the sessions in them) and about your plan's limits (its usage card, read once a minute by one session for all), and the kind of API error a turn died on. The app adds what status.claude.com says of Claude Code and the API. The app merges those records and draws the office; everything that moves, from the walking to the café chats, is decided in the browser.
 
 ## Develop
 
@@ -67,5 +69,5 @@ The mod is a Claude Code plugin of function hooks: it hears each session's tool 
 ## Notes
 
 - Claude's orange mascot belongs to Anthropic; the people, furniture and rooms are original pixel art.
-- The mod reads only what the desktop app tells it about your sessions and what each session's own copy publishes. The app reads that from your disk and serves it on your own network. Nothing is sent anywhere else.
+- The mod reads only what the desktop app tells it about your sessions and what each session's own copy publishes. The app reads that from your disk and serves it on your own network. Nothing is sent anywhere else; the app's only request out reads Anthropic's public status page and carries nothing of yours.
 - MIT licensed. Made by Berk Özdoruk ([Boz Apps](https://bozapps.net)) with Claude Code.

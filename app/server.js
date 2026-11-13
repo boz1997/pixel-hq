@@ -9,6 +9,9 @@ import { demoState } from './demo.js'
 
 const PUBLIC = path.join(path.dirname(fileURLToPath(import.meta.url)), 'public')
 const STORE_DIR = path.join(os.homedir(), '.claude', 'plugins', 'store')
+const STATUS_URL = 'https://status.claude.com/api/v2/summary.json'
+const STATUS_MS = 60_000
+const WATCHED = /^(Claude Code|Claude API)\b/
 
 const TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -59,6 +62,38 @@ export function readState() {
     }
   }
   return { at: Date.now(), roster, lives, plan, sources: files.length }
+}
+
+/** What Anthropic's public status page says of Claude Code and the API: their components, and their incidents not yet resolved. */
+export function statusFrom(summary, now = Date.now()) {
+  const components = (summary.components ?? [])
+    .filter(c => !c.group && WATCHED.test(c.name ?? ''))
+    .map(c => ({ name: c.name, status: c.status }))
+  const incidents = (summary.incidents ?? [])
+    .filter(i => !['resolved', 'postmortem', 'completed'].includes(i.status) && (i.components ?? []).some(c => WATCHED.test(c.name ?? '')))
+    .map(i => ({
+      name: i.name,
+      impact: i.impact,
+      status: i.status,
+      startedAt: i.started_at ?? i.created_at,
+      update: String(i.incident_updates?.[0]?.body ?? '').replace(/\s+/g, ' ').slice(0, 280),
+    }))
+  return { at: now, indicator: summary.status?.indicator ?? 'none', description: summary.status?.description ?? '', components, incidents }
+}
+
+/** Asks the status page once a minute; while it cannot be reached, the last answer stands until the office calls it stale. */
+function watchStatus() {
+  const watch = { value: null }
+  const ask = () =>
+    fetch(STATUS_URL, { signal: AbortSignal.timeout(10_000), headers: { accept: 'application/json', 'user-agent': 'pixel-hq' } })
+      .then(res => (res.ok ? res.json() : undefined))
+      .then(summary => {
+        if (summary) watch.value = statusFrom(summary)
+      })
+      .catch(() => undefined)
+  void ask()
+  setInterval(ask, STATUS_MS).unref()
+  return watch
 }
 
 function send(res, status, type, body) {
@@ -113,8 +148,9 @@ function networkAddresses() {
   return out
 }
 
-export function startServer({ port = 2323, host = '0.0.0.0', open = true, asApp = true, password, demo = false } = {}) {
-  const state = () => (demo ? demoState() : readState())
+export function startServer({ port = 2323, host = '0.0.0.0', open = true, asApp = true, password, demo = false, status = true } = {}) {
+  const watch = !demo && status ? watchStatus() : null
+  const state = () => (demo ? demoState() : { ...readState(), status: watch?.value ?? null })
   const server = http.createServer((req, res) => {
     const url = new URL(req.url, 'http://localhost')
     if (url.pathname === '/api/state') {
@@ -141,6 +177,7 @@ export function startServer({ port = 2323, host = '0.0.0.0', open = true, asApp 
       for (const { address } of networkAddresses()) console.log(`                               or http://${address}:${port}`)
       if (!password) console.log('anyone on this network can open it; add --password to ask for one')
     }
+    if (watch) console.log('asking status.claude.com once a minute whether Claude is down (--no-status to stop)')
     if (demo) console.log('showing the demo office; drop --demo to see your own sessions')
     else console.log(files.length > 0 ? `reading ${files.length} store file${files.length === 1 ? '' : 's'} under ${STORE_DIR}` : `no store file under ${STORE_DIR} yet: install the mod and open a session (or try --demo)`)
     if (open) console.log(`opening it in ${openBrowser(local, asApp)}`)
