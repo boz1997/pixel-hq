@@ -205,8 +205,8 @@ export function makeMascot() {
   return { root, parts: { body, legs }, phase: 0, kind: 'mascot' }
 }
 
-/** A black labrador with a red collar. */
-export function makeDog() {
+/** A black labrador; its collar red unless another color is given. */
+export function makeDog(collarColor = '#e0484d') {
   const root = new THREE.Group()
   const body = new THREE.Group()
   root.add(body)
@@ -232,10 +232,13 @@ export function makeDog() {
     eye.position.set(side * 0.055, 0.04, 0.11)
     head.add(eye)
   }
-  const collar = new THREE.Mesh(new THREE.TorusGeometry(0.1, 0.022, 6, 16), mat('#e0484d', { roughness: 0.5 }))
-  collar.position.set(0, 0.44, 0.22)
+  const collar = new THREE.Mesh(new THREE.TorusGeometry(0.118, 0.036, 8, 20), mat(collarColor, { roughness: 0.4 }))
+  collar.position.set(0, 0.45, 0.23)
   collar.rotation.x = Math.PI / 2.4
-  body.add(head, collar)
+  const tag = new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.032, 0.012, 14), mat('#e6b422', { roughness: 0.3, metalness: 0.7 }))
+  tag.rotation.x = Math.PI / 2
+  tag.position.set(0, 0.36, 0.335)
+  body.add(head, collar, tag)
   const legs = []
   for (const [x, z] of [[-0.09, 0.2], [0.09, 0.2], [-0.09, -0.2], [0.09, -0.2]]) {
     const pivot = new THREE.Group()

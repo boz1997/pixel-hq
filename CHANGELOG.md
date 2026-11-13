@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- **The Boz Apps wall**: the maker's wordmark on the office's left wall, its O a propeller that turns, as on bozapps.net.
+- **Moving about like a map**: drag to move, right-drag or double-click and drag to turn and tilt, the wheel or a pinch zooms toward the pointer, two fingers on a trackpad slide, the arrow keys or WASD walk with Q E to turn, R F to tilt and + − to zoom, a double-click zooms in on a spot or flies to a person; the view stays over the office, and a ? card lists the moves.
+- **A second black labrador**, with a blue collar, in both offices; each dog now wears a gold tag.
+- **Windows that make room**: the windows on the outer walls go in the gaps between the boards, the screen, the shelves, the Boz Apps wall and the glass walls that meet them, a narrower one where only that fits, instead of on a fixed beat behind them.
+- **A proper WC**: tiled floor and walls, two stalls whose doors close on whoever is in under a red lamp (green when free), a counter with two basins and a mirror, a hand dryer, a sign outside.
+
 ## 0.3.0 — the 3D office
 
 - **The 3D office**, now the main view: an isometric office with glass rooms per sidebar group, wooden floors, windows, a corner office for Claude, a meeting room, a library, a studio, a café and a WC, people who sit, type, walk and wave, subagents, a black labrador, day and night. Drag to turn it, scroll to zoom, click anyone for their card. The pixel office stays at `/pixel.html`.

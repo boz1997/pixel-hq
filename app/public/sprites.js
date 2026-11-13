@@ -165,6 +165,7 @@ export const DOG = [
   ['............d.', 'd.........dddd', 'dd.ddddddddDdn', '.ddddddddddrdd', '.dddddddddddd.', '...dd..dd.....', '....dddd......'],
 ]
 export const DOG_PALETTE = { d: '#1b1b1f', D: '#f0e6c8', n: '#4a4a52', r: '#e0484d' }
+export const DOG_PALETTE_BLUE = { ...DOG_PALETTE, r: '#2f6fe0' }
 
 export const CHECK = ['....L', '...L.', 'L.L..', '.L...']
 export const PAPER = ['wwwww', 'wggww', 'wgggw', 'wggww', 'wwwww']

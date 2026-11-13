@@ -43,6 +43,7 @@ export function createUi(world, sim, actions) {
     <div id="brand" class="card"><b>PIXEL HQ</b><div class="sub" id="counts">loading…</div></div>
     <div id="banner"><span>⚠</span><span id="banner-text"></span><a id="banner-link" href="https://status.claude.com" target="_blank" rel="noopener">status.claude.com</a></div>
     <div id="controls">
+      <button class="btn" id="help-toggle" title="How to move around">?</button>
       <button class="btn hide-sm" id="fit" title="See the whole office">⤢</button>
       <button class="btn" id="tour">▶ Tour</button>
       <div class="seg hide-sm" title="calm: everyone stays at their desk · lively: people move around"><button id="mode-calm">Calm</button><button id="mode-lively">Lively</button></div>
@@ -59,6 +60,20 @@ export function createUi(world, sim, actions) {
         <button class="btn primary" id="task-send">Assign →</button>
       </div>
       <div id="ticker"></div>
+    </div>
+    <div id="help" class="card">
+      <b>Moving around</b>
+      <div class="rows">
+        <span class="k">Drag</span><span>move over the office</span>
+        <span class="k">Right-drag</span><span>turn and tilt, or double-click and drag</span>
+        <span class="k">Scroll · pinch</span><span>zoom toward the pointer</span>
+        <span class="k">Two fingers</span><span>slide on a trackpad</span>
+        <span class="k">Double-click</span><span>zoom in there, or on a person: their card</span>
+        <span class="k">Arrows · WASD</span><span>walk</span>
+        <span class="k">Q E · R F</span><span>turn · tilt</span>
+        <span class="k">+ −</span><span>zoom</span>
+        <span class="k">⤢</span><span>the whole office again</span>
+      </div>
     </div>
     <div id="folded"></div>
     <div id="toasts"></div>
@@ -84,6 +99,14 @@ export function createUi(world, sim, actions) {
     })
   }
   $('#fit').addEventListener('click', () => actions.fit())
+  const help = $('#help')
+  $('#help-toggle').addEventListener('click', () => help.classList.toggle('open'))
+  help.addEventListener('click', () => help.classList.remove('open'))
+  if (!localStorage.getItem('pixel-hq-help-seen')) {
+    help.classList.add('open')
+    localStorage.setItem('pixel-hq-help-seen', '1')
+    setTimeout(() => help.classList.remove('open'), 12_000)
+  }
   $('#tour').addEventListener('click', () => (ui.tour ? stopTour(ui) : startTour(ui)))
   $('#task-send').addEventListener('click', () => sendTask(ui))
   $('#task-text').addEventListener('input', e => e.target.classList.toggle('has-text', e.target.value.trim() !== ''))
@@ -216,7 +239,7 @@ function bubbleOf(ui, e, now) {
     const says = waiting > 0 ? `${waiting} need${waiting === 1 ? 's' : ''} you` : busy > 0 ? `${busy} at work` : workers.length > 0 ? 'all quiet' : 'nobody in yet'
     return { tone: waiting > 0 ? 'wait' : 'boss', text: `👑 ${says}` }
   }
-  if (e.kind === 'dog') return ui.sim.outage?.level === 'down' && Math.floor(now / 900) % 3 === 0 ? { tone: 'work', text: 'woof!' } : null
+  if (e.kind === 'dog') return ui.sim.outage?.level === 'down' && Math.floor(now / 900 + (e.id === 'dog' ? 0 : 1.5)) % 3 === 0 ? { tone: 'work', text: 'woof!' } : null
   if (e.kind === 'helper') {
     if (e.dest === 'panic') return { tone: 'panic', text: Math.floor(now / 700) % 2 ? '!!' : '?!' }
     if (e.phase === 'delivering' && arrived(e)) return { tone: 'done', text: 'here you go' }
@@ -253,7 +276,7 @@ function bubbleOf(ui, e, now) {
 
 /** Every frame: the bubbles follow the people, the labels scale with the zoom. */
 export function updateMovingLabels(ui, now) {
-  const all = [...ui.sim.workers.values(), ...ui.sim.helpers.values(), ui.sim.manager, ui.sim.dog].filter(Boolean)
+  const all = [...ui.sim.workers.values(), ...ui.sim.helpers.values(), ui.sim.manager, ...ui.sim.dogs].filter(Boolean)
   const alive = new Set()
   for (const e of all) {
     alive.add(e.id)

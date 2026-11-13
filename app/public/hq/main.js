@@ -1,6 +1,7 @@
 import * as THREE from 'three'
 
 import { departmentsOf, modelName, outageOf, poll, prefs, resetsIn, sessionsOf, store, usagePeak, usageRows } from './data.js'
+import { createNav } from './nav.js'
 import { makePlan, tablesOf } from './plan.js'
 import { behave, createSim, replan, sync, update } from './sim.js'
 import { buildStaticLabels, createUi, select, showGate, stopTour, tickTour, updateHud, updateMovingLabels, updateStaticLabels } from './ui.js'
@@ -114,6 +115,41 @@ function frameAll(isInstant = false) {
 world.controls.addEventListener('start', () => {
   fly = null
   stopTour(ui, true)
+})
+
+/** A double-click zooms in on that spot, or flies to the person there and opens their card. */
+function onDoubleClick(e) {
+  const rect = canvas.getBoundingClientRect()
+  ndc.set(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1)
+  ray.setFromCamera(ndc, world.camera)
+  const people = [...sim.workers.values()]
+  const hits = ray.intersectObjects(people.map(p => p.fig.root), true)
+  if (hits.length > 0) {
+    let o = hits[0].object
+    while (o && !people.some(p => p.fig.root === o)) o = o.parent
+    const who = people.find(p => p.fig.root === o)
+    if (who) {
+      ui.selected = null
+      select(ui, who.id)
+      ui.flyToSession(who.id)
+      return
+    }
+  }
+  const point = ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), new THREE.Vector3())
+  if (!point) return
+  const offset = world.camera.position.clone().sub(world.controls.target)
+  const dist = Math.max(world.controls.minDistance + 1, offset.length() * 0.55)
+  const target = new THREE.Vector3(point.x, 0, point.z)
+  fly = { from: { position: world.camera.position.clone(), target: world.controls.target.clone() }, to: { position: target.clone().add(offset.normalize().multiplyScalar(dist)), target }, t: 0 }
+}
+
+const nav = createNav(world, {
+  onMove: () => {
+    fly = null
+    stopTour(ui, true)
+  },
+  onDoubleClick: e => onDoubleClick(e),
+  bounds: () => (plan ? { minX: -2, maxX: plan.width + 2, minZ: -2, maxZ: plan.depth + 2 } : null),
 })
 
 // ------------------------------------------------------------------ picking
@@ -256,6 +292,19 @@ function lights(now) {
   for (const light of world.handles?.sirens ?? []) light.intensity = siren * 14
 }
 
+/** The Boz Apps propeller turns like it does on bozapps.net; a stall closes and shows red while someone is in. */
+function props(dt) {
+  const propeller = world.handles?.propeller
+  if (propeller && !REDUCED_MOTION) propeller.rotation.x -= dt * ((Math.PI * 2) / 3.2)
+  ;(world.handles?.stalls ?? []).forEach((stall, i) => {
+    if (!stall) return
+    const who = sim.reserved.get(`wc:${i}`)
+    const isIn = Boolean(who && sim.workers.get(who)?.hidden)
+    stall.hinge.rotation.y += ((isIn ? 0 : 1.15) - stall.hinge.rotation.y) * Math.min(1, dt * 6)
+    stall.lamp.emissive.set(isIn ? '#ff3b30' : '#34c759')
+  })
+}
+
 let last = performance.now()
 let behaveIn = 0
 function loop(t) {
@@ -270,6 +319,8 @@ function loop(t) {
       behaveIn = 0.05
     }
     lights(now)
+    props(dt)
+    nav.step(dt)
     tickTour(ui, now)
     updateMovingLabels(ui, now)
   }
@@ -306,6 +357,8 @@ window.__hq3d = {
       update(sim, 0.05, now)
       behave(sim, now)
       lights(now)
+      props(0.05)
+      nav.step(0.05)
       updateMovingLabels(ui, now)
     }
     world.controls.update()

@@ -98,7 +98,7 @@ export function makePlan(departments) {
   const depth = zFront + cafeD + (fitsBeside ? CORRIDOR : 0) + MARGIN
 
   const cafe = { id: 'cafe', kind: 'cafe', name: 'Café', x: cafeX, z: zFront, w: 12, d: cafeD, walls: null }
-  const wc = { id: 'wc', kind: 'wc', name: 'WC', x: cafeX + 12.6, z: zFront + 0.4, w: 3, d: 3.2, walls: { n: true, w: true, e: true, s: true }, door: { side: 'n', at: 0.8, len: 1.4 }, isFrosted: true }
+  const wc = { id: 'wc', kind: 'wc', name: 'WC', x: cafeX + 12.6, z: zFront + 0.4, w: 3, d: 3.2, walls: { n: true, w: true, e: true, s: true }, door: { side: 'n', at: 0.15, len: 1.3 }, isFrosted: true }
   rooms.push(cafe, wc)
 
   // The manager's office: the boss's desk, the home of Claude, the boards and the lamp on the back wall.
@@ -165,15 +165,44 @@ export function makePlan(departments) {
   }
   furniture.push({ kind: 'plant', x: cx + 0.5, z: cz + 5.6, s: 1.3 }, { kind: 'plant', x: cx + 11.4, z: cz + 5.5, s: 1.1 }, { kind: 'plant', x: cx + 6.8, z: cz + 0.5, s: 0.9 })
 
-  zones.wc.push({ x: wc.x + 1.5, z: wc.z + 2.1, rot: 0, pose: 'hide' })
-  furniture.push({ kind: 'plant', x: wc.x + 2.6, z: wc.z + 2.8, s: 0.7 })
+  // The WC: two stalls on the east side, a counter with two basins and a mirror on the west, a hand dryer.
+  furniture.push({ kind: 'wcFloor', x: wc.x, z: wc.z, w: wc.w, d: wc.d })
+  for (const [i, z0] of [[0, 0.1], [1, 1.6]]) {
+    furniture.push({ kind: 'stall', i, x: wc.x + wc.w - 1.3, z: wc.z + z0, w: 1.3, d: 1.5 })
+    zones.wc.push({ x: wc.x + wc.w - 0.62, z: wc.z + z0 + 0.75, rot: -Math.PI / 2, pose: 'hide' })
+  }
+  furniture.push({ kind: 'wcCounter', x: wc.x + 0.02, z: wc.z + 1.35, w: 0.55, d: 1.75 })
+  furniture.push({ kind: 'dryer', x: wc.x + 0.02, z: wc.z + 0.8 })
+  furniture.push({ kind: 'wcSign', x: wc.x + wc.w + 0.03, z: wc.z + 0.9 })
+  furniture.push({ kind: 'plant', x: wc.x + wc.w + 0.45, z: wc.z + wc.d - 0.3, s: 0.8 })
 
   const entrance = { x: width - 2.2, z: depth - 0.25 }
+  const brand = { z: MARGIN + BACK_D + CORRIDOR + ROOM_D / 2, w: 3.6, h: 1.05, y: 1.72 }
+
+  // What hangs on or meets the outer walls, so the windows go between them: the boards, the screen, the shelves,
+  // the Boz Apps wall, and every glass wall that runs into them.
+  const back = [
+    [m.x + 0.9, m.x + 3.9],
+    [m.x + 3.8, m.x + 4.2],
+    [m.x + 4.5, m.x + 7.2],
+    [mt.x + mt.w / 2 - 1.2, mt.x + mt.w / 2 + 1.2],
+    [lb.x + 0.6, lb.x + 5.4],
+  ]
+  const left = [
+    [m.z + 3.2, m.z + 5.4],
+    [brand.z - brand.w / 2, brand.z + brand.w / 2],
+  ]
+  for (const room of rooms) {
+    if (!room.walls) continue
+    if (room.z <= MARGIN + 0.01) back.push([room.x - 0.05, room.x + 0.05], [room.x + room.w - 0.05, room.x + room.w + 0.05])
+    if (room.x <= MARGIN + 0.01) left.push([room.z - 0.05, room.z + 0.05], [room.z + room.d - 0.05, room.z + room.d + 0.05])
+  }
+  const wallItems = { back, left }
   zones.exit = { x: entrance.x, z: depth - 0.25, rot: Math.PI, pose: 'stand' }
   furniture.push({ kind: 'plant', x: width - 0.6, z: MARGIN + BACK_D + 0.7, s: 1.1 }, { kind: 'plant', x: width - 0.6, z: depth - 1.2, s: 1.2 })
 
   const grid = makeGrid(width, depth, rooms, furniture, [...desks.values()], zones)
-  return { width, depth, rooms, desks, furniture, zones, entrance, grid, signature: '' }
+  return { width, depth, rooms, desks, furniture, zones, entrance, brand, wallItems, grid, signature: '' }
 }
 
 // ------------------------------------------------------------------ the walking grid
@@ -222,6 +251,13 @@ function makeGrid(width, depth, rooms, furniture, desks, zones) {
     if (f.kind === 'sofa') mark(f.x - f.w / 2, f.rot ? f.z + 0.1 : f.z - 0.45, f.x + f.w / 2, f.rot ? f.z + 0.45 : f.z - 0.1)
     if (f.kind === 'easel') mark(f.x - 0.35, f.z - 0.3, f.x + 0.35, f.z + 0.3)
     if (f.kind === 'espresso' || f.kind === 'plant') mark(f.x - 0.25, f.z - 0.25, f.x + 0.25, f.z + 0.25)
+    if (f.kind === 'wcCounter') mark(f.x, f.z, f.x + f.w, f.z + f.d)
+    if (f.kind === 'stall') {
+      mark(f.x, f.z - 0.03, f.x + f.w, f.z + 0.03)
+      mark(f.x, f.z + f.d - 0.03, f.x + f.w, f.z + f.d + 0.03)
+      mark(f.x - 0.03, f.z, f.x + 0.03, f.z + 0.35)
+      mark(f.x - 0.03, f.z + f.d - 0.35, f.x + 0.03, f.z + f.d)
+    }
   }
   const spots = [...desks.flatMap(d => [d.seat, ...d.sides]), ...zones.library, ...zones.studio, ...zones.cafe, ...zones.meeting, ...zones.wc, zones.exit, zones.manager.home, ...zones.manager.spots]
   for (const s of spots) if (s) mark(s.x - 0.01, s.z - 0.01, s.x + 0.01, s.z + 0.01, 0)

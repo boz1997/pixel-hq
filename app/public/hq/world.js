@@ -163,7 +163,7 @@ function materials() {
   M.paneFrame = mat('#ffffff', { roughness: 0.5 })
   M.glass = new THREE.MeshStandardMaterial({ color: '#d7e7ee', transparent: true, opacity: 0.17, roughness: 0.05, metalness: 0.1, depthWrite: false, side: THREE.DoubleSide })
   M.glass.userData.cast = false
-  M.frosted = new THREE.MeshStandardMaterial({ color: '#eef3f5', transparent: true, opacity: 0.6, roughness: 0.4, depthWrite: false, side: THREE.DoubleSide })
+  M.frosted = new THREE.MeshStandardMaterial({ color: '#eef3f5', transparent: true, opacity: 0.42, roughness: 0.4, depthWrite: false, side: THREE.DoubleSide })
   M.frosted.userData.cast = false
   M.frame = mat('#24272d', { roughness: 0.45, metalness: 0.2 })
   M.deskTop = mat('#e8b26a', { roughness: 0.55 })
@@ -183,6 +183,16 @@ function materials() {
   M.white = mat('#fbfbfa', { roughness: 0.6 })
   M.easelWood = mat('#c49a6c', { roughness: 0.7 })
   M.canvas = mat('#fdfcf8', { roughness: 0.9 })
+  M.wcWall = mat('#e9f1f3', { roughness: 0.35 })
+  M.porcelain = mat('#fbfcfd', { roughness: 0.18, metalness: 0.05 })
+  M.partition = mat('#dde6ea', { roughness: 0.45 })
+  M.stallDoor = mat('#7cc7b8', { roughness: 0.5 })
+  M.chrome = mat('#d9dee4', { roughness: 0.12, metalness: 0.9 })
+  M.mirror = mat('#cfe0e6', { roughness: 0.04, metalness: 0.95 })
+  M.quartz = mat('#f4f3ef', { roughness: 0.25 })
+  M.cabinet = mat('#9fb3ba', { roughness: 0.6 })
+  M.brandInk = mat('#0c2e29', { roughness: 0.55 })
+  M.brandTeal = mat('#31dbc9', { roughness: 0.35, metalness: 0.2, emissive: '#31dbc9', emissiveIntensity: 0.45 })
   M.ready = true
   return M
 }
@@ -224,17 +234,18 @@ export function buildOffice(world, plan) {
   boxes.add(m.wallCap, W / 2, OUTER_H + 0.02, -0.075, W + 0.15, 0.04, 0.17)
   boxes.add(m.wallCap, -0.075, OUTER_H + 0.02, D / 2, 0.17, 0.04, D)
   const windows = []
-  for (let x = 1.6; x < W - 1; x += 3.2) {
-    boxes.add(m.paneFrame, x, 1.6, 0.012, 1.86, 1.36, 0.02)
-    windows.push({ x, y: 1.6, z: 0.026, ry: 0 })
+  for (const { at, width } of windowSpots(W, plan.wallItems?.back ?? [])) {
+    boxes.add(m.paneFrame, at, 1.6, 0.012, width, 1.36, 0.02)
+    windows.push({ x: at, y: 1.6, z: 0.026, ry: 0, width })
   }
-  for (let z = 2.2; z < D - 1; z += 3.6) {
-    boxes.add(m.paneFrame, 0.012, 1.6, z, 0.02, 1.36, 1.86)
-    windows.push({ x: 0.026, y: 1.6, z, ry: Math.PI / 2 })
+  for (const { at, width } of windowSpots(D, plan.wallItems?.left ?? [])) {
+    boxes.add(m.paneFrame, 0.012, 1.6, at, 0.02, 1.36, width)
+    windows.push({ x: 0.026, y: 1.6, z: at, ry: Math.PI / 2, width })
   }
-  const paneGeo = new THREE.PlaneGeometry(1.7, 1.2)
+  const paneGeo = new THREE.PlaneGeometry(1, 1.2)
   for (const w of windows) {
     const pane = new THREE.Mesh(paneGeo, m.pane)
+    pane.scale.x = w.width - 0.16
     pane.position.set(w.x, w.y, w.z)
     pane.rotation.y = w.ry
     group.add(pane)
@@ -262,7 +273,10 @@ export function buildOffice(world, plan) {
         const cx = horizontal ? x0 + mid : x0
         const cz = horizontal ? z0 : z0 + mid
         const ry = horizontal ? 0 : Math.PI / 2
-        boxes.add(glass, cx, WALL_H / 2, cz, l, WALL_H, 0.025, ry)
+        if (room.kind === 'wc') {
+          boxes.add(m.wcWall, cx, 0.3, cz, l, 0.6, 0.06, ry)
+          boxes.add(glass, cx, 0.6 + (WALL_H - 0.6) / 2, cz, l, WALL_H - 0.6, 0.025, ry)
+        } else boxes.add(glass, cx, WALL_H / 2, cz, l, WALL_H, 0.025, ry)
         boxes.add(m.frame, cx, WALL_H, cz, l + 0.035, 0.035, 0.035, ry)
         boxes.add(skirt, cx, 0.03, cz, l, 0.06, 0.05, ry)
         const posts = Math.max(1, Math.round(l / 1.6))
@@ -279,7 +293,8 @@ export function buildOffice(world, plan) {
     wall('e', x + w, z, x + w, z + d)
   }
 
-  const handles = { laptops: new Map(), panels: {}, beacon: null, sirens: [], pickables: [] }
+  const handles = { laptops: new Map(), panels: {}, beacon: null, sirens: [], pickables: [], stalls: [], propeller: null }
+  if (plan.brand) handles.propeller = brandWall(group, boxes, m, plan.brand)
   for (const f of plan.furniture) furnish(group, boxes, m, f, handles)
 
   // A laptop at every taken desk; its screen lights by what the session does.
@@ -634,6 +649,99 @@ function furnish(group, boxes, m, f, handles) {
       handles.espresso = { x: f.x, y: 1.4, z: f.z + 0.1 }
       break
     }
+    case 'wcFloor': {
+      const tiles = tileTexture()
+      tiles.repeat.set(f.w / 0.6, f.d / 0.6)
+      const floor = new THREE.Mesh(new THREE.PlaneGeometry(f.w, f.d), new THREE.MeshStandardMaterial({ map: tiles, roughness: 0.3 }))
+      floor.rotation.x = -Math.PI / 2
+      floor.position.set(f.x + f.w / 2, 0.004, f.z + f.d / 2)
+      floor.receiveShadow = true
+      group.add(floor)
+      break
+    }
+    case 'stall':
+      handles.stalls[f.i] = stall(group, boxes, m, f)
+      break
+    case 'wcCounter': {
+      boxes.add(m.cabinet, f.x + f.w / 2, 0.42, f.z + f.d / 2, f.w - 0.06, 0.78, f.d - 0.08)
+      boxes.add(m.quartz, f.x + f.w / 2, 0.84, f.z + f.d / 2, f.w, 0.06, f.d)
+      for (const dz of [0.45, 1.3]) {
+        const basin = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.12, 0.08, 24), m.porcelain)
+        basin.position.set(f.x + f.w / 2 + 0.03, 0.89, f.z + dz)
+        basin.castShadow = true
+        const water = new THREE.Mesh(new THREE.CircleGeometry(0.13, 20), colored('#bfe3ea', { roughness: 0.05, metalness: 0.3 }))
+        water.rotation.x = -Math.PI / 2
+        water.position.set(f.x + f.w / 2 + 0.03, 0.932, f.z + dz)
+        group.add(basin, water)
+        boxes.add(m.chrome, f.x + 0.09, 0.97, f.z + dz, 0.04, 0.18, 0.04)
+        boxes.add(m.chrome, f.x + 0.15, 1.05, f.z + dz, 0.14, 0.03, 0.03)
+        boxes.add(colored('#7cc7b8', { roughness: 0.4 }), f.x + 0.08, 0.93, f.z + dz + 0.25, 0.07, 0.12, 0.07)
+      }
+      boxes.add(m.dark, f.x + 0.005, 1.48, f.z + f.d / 2, 0.02, 0.84, f.d - 0.1)
+      const mirror = canvasPanel(f.d - 0.18, 0.76, (g, w, h) => {
+        const sky = g.createLinearGradient(0, 0, w, h)
+        sky.addColorStop(0, '#f4fafc')
+        sky.addColorStop(0.55, '#cfe2ea')
+        sky.addColorStop(1, '#e8f2f6')
+        g.fillStyle = sky
+        g.fillRect(0, 0, w, h)
+        g.fillStyle = 'rgba(255,255,255,0.65)'
+        for (const [x, width] of [[0.18, 0.05], [0.27, 0.02], [0.66, 0.04]]) {
+          g.beginPath()
+          g.moveTo(w * x, h)
+          g.lineTo(w * (x + width), h)
+          g.lineTo(w * (x + width + 0.22), 0)
+          g.lineTo(w * (x + 0.22), 0)
+          g.closePath()
+          g.fill()
+        }
+      })
+      mirror.mesh.material.emissiveIntensity = 0.35
+      mirror.mesh.rotation.y = Math.PI / 2
+      mirror.mesh.position.set(f.x + 0.018, 1.48, f.z + f.d / 2)
+      group.add(mirror.mesh)
+      break
+    }
+    case 'dryer':
+      boxes.add(m.white, f.x + 0.09, 1.2, f.z, 0.16, 0.3, 0.3)
+      boxes.add(m.dark, f.x + 0.175, 1.08, f.z, 0.02, 0.04, 0.2)
+      boxes.add(m.chrome, f.x + 0.12, 1.33, f.z, 0.1, 0.02, 0.24)
+      break
+    case 'wcSign': {
+      const sign = canvasPanel(0.62, 0.42, (g, w, h) => {
+        g.fillStyle = '#1f2128'
+        roundRect(g, 0, 0, w, h, h * 0.16)
+        g.fill()
+        const person = (cx, isDress) => {
+          g.fillStyle = '#ffffff'
+          g.beginPath()
+          g.arc(cx, h * 0.27, h * 0.075, 0, Math.PI * 2)
+          g.fill()
+          if (isDress) {
+            g.beginPath()
+            g.moveTo(cx, h * 0.38)
+            g.lineTo(cx - h * 0.13, h * 0.7)
+            g.lineTo(cx + h * 0.13, h * 0.7)
+            g.closePath()
+            g.fill()
+          } else g.fillRect(cx - h * 0.075, h * 0.38, h * 0.15, h * 0.32)
+          g.fillRect(cx - h * 0.05, h * 0.68, h * 0.035, h * 0.16)
+          g.fillRect(cx + h * 0.015, h * 0.68, h * 0.035, h * 0.16)
+        }
+        person(w * 0.2, false)
+        person(w * 0.4, true)
+        g.fillStyle = '#7cc7b8'
+        g.fillRect(w * 0.53, h * 0.22, 3, h * 0.56)
+        g.fillStyle = '#ffffff'
+        g.font = `800 ${Math.round(h * 0.4)}px Inter, -apple-system, "Segoe UI", sans-serif`
+        g.textBaseline = 'middle'
+        g.fillText('WC', w * 0.6, h * 0.53)
+      })
+      sign.mesh.rotation.y = Math.PI / 2
+      sign.mesh.position.set(f.x, 1.5, f.z)
+      group.add(sign.mesh)
+      break
+    }
     case 'stool': {
       const seat = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.17, 0.06, 18), m.chairSeat)
       seat.position.set(f.x, 0.66, f.z)
@@ -646,6 +754,160 @@ function furnish(group, boxes, m, f, handles) {
     default:
       break
   }
+}
+
+/** Windows along a wall of `length`, in the gaps between what hangs on it: full ones spaced evenly, a narrower one where only that fits. */
+function windowSpots(length, blocked, width = 1.86, between = 1.2, margin = 0.25) {
+  const spans = blocked.map(([a, b]) => [a - margin, b + margin]).sort((p, q) => p[0] - q[0])
+  const free = []
+  let start = 0.5
+  for (const [a, b] of spans) {
+    if (a > start) free.push([start, a])
+    start = Math.max(start, b)
+  }
+  if (length - 0.5 > start) free.push([start, length - 0.5])
+  const spots = []
+  for (const [a, b] of free) {
+    const n = Math.floor((b - a + between) / (width + between))
+    if (n <= 0) {
+      if (b - a >= 1.25) spots.push({ at: (a + b) / 2, width: Math.min(1.5, b - a - 0.1) })
+      continue
+    }
+    let x = a + (b - a - (n * width + (n - 1) * between)) / 2 + width / 2
+    for (let i = 0; i < n; i++) {
+      spots.push({ at: x, width })
+      x += width + between
+    }
+  }
+  return spots
+}
+
+function roundRect(g, x, y, w, h, r) {
+  g.beginPath()
+  g.moveTo(x + r, y)
+  g.arcTo(x + w, y, x + w, y + h, r)
+  g.arcTo(x + w, y + h, x, y + h, r)
+  g.arcTo(x, y + h, x, y, r)
+  g.arcTo(x, y, x + w, y, r)
+  g.closePath()
+}
+
+/** Small square tiles with grout, for the WC floor. */
+function tileTexture() {
+  const canvas = document.createElement('canvas')
+  canvas.width = 256
+  canvas.height = 256
+  const g = canvas.getContext('2d')
+  g.fillStyle = '#c9d3d8'
+  g.fillRect(0, 0, 256, 256)
+  for (let r = 0; r < 4; r++) {
+    for (let c = 0; c < 4; c++) {
+      const shade = (r + c) % 2 === 0 ? '#eef2f4' : '#e2e9ec'
+      g.fillStyle = shade
+      g.fillRect(c * 64 + 2, r * 64 + 2, 60, 60)
+    }
+  }
+  const texture = new THREE.CanvasTexture(canvas)
+  texture.wrapS = THREE.RepeatWrapping
+  texture.wrapT = THREE.RepeatWrapping
+  texture.colorSpace = THREE.SRGBColorSpace
+  return texture
+}
+
+/** A stall: two partitions, a front with a door that closes on whoever is in, a lamp that says so, a toilet. */
+function stall(group, boxes, m, f) {
+  const H = 1.55
+  const y = 0.12 + H / 2
+  boxes.add(m.partition, f.x + f.w / 2, y, f.z, f.w, H, 0.04)
+  boxes.add(m.partition, f.x + f.w / 2, y, f.z + f.d, f.w, H, 0.04)
+  boxes.add(m.partition, f.x, y, f.z + 0.175, 0.04, H, 0.35)
+  boxes.add(m.partition, f.x, y, f.z + f.d - 0.175, 0.04, H, 0.35)
+  for (const z of [f.z, f.z + f.d]) for (const x of [f.x, f.x + f.w - 0.05]) boxes.add(m.chrome, x, 0.06, z, 0.04, 0.12, 0.04)
+  const hinge = new THREE.Group()
+  hinge.position.set(f.x, 0, f.z + 0.35)
+  const door = new THREE.Mesh(unitBox, m.stallDoor)
+  door.scale.set(0.04, H, f.d - 0.7)
+  door.position.set(0, y, (f.d - 0.7) / 2)
+  door.castShadow = true
+  const lampMat = new THREE.MeshStandardMaterial({ color: '#1f2128', emissive: '#34c759', emissiveIntensity: 1.4 })
+  const lamp = new THREE.Mesh(unitBox, lampMat)
+  lamp.scale.set(0.12, 0.05, 0.26)
+  lamp.position.set(f.x, 0.12 + H + 0.03, f.z + f.d / 2)
+  group.add(lamp)
+  boxes.add(m.partition, f.x, 0.12 + H - 0.04, f.z + f.d / 2, 0.04, 0.08, f.d - 0.7)
+  const handle = new THREE.Mesh(unitBox, m.chrome)
+  handle.scale.set(0.03, 0.02, 0.12)
+  handle.position.set(-0.035, 0.95, f.d - 0.7 - 0.12)
+  hinge.add(door, handle)
+  hinge.rotation.y = 1.15
+  group.add(hinge)
+  const tx = f.x + f.w - 0.36
+  const tz = f.z + f.d / 2
+  const bowl = new THREE.Mesh(new THREE.CylinderGeometry(0.19, 0.14, 0.38, 22), m.porcelain)
+  bowl.position.set(tx - 0.05, 0.19, tz)
+  const seat = new THREE.Mesh(new THREE.TorusGeometry(0.15, 0.035, 10, 24), m.porcelain)
+  seat.rotation.x = Math.PI / 2
+  seat.position.set(tx - 0.05, 0.4, tz)
+  bowl.castShadow = true
+  group.add(bowl, seat)
+  boxes.add(m.porcelain, tx + 0.22, 0.58, tz, 0.18, 0.42, 0.44)
+  boxes.add(m.chrome, tx + 0.22, 0.8, tz, 0.08, 0.02, 0.08)
+  const roll = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.1, 14), m.white)
+  roll.rotation.x = Math.PI / 2
+  roll.position.set(tx, 0.7, f.z + 0.08)
+  group.add(roll)
+  return { hinge, lamp: lampMat }
+}
+
+/** The Boz Apps wall: B, a propeller for the O, Z APPS, on the brand's deep green; answers the propeller. */
+function brandWall(group, boxes, m, b) {
+  boxes.add(m.brandInk, 0.03, b.y, b.z, 0.05, b.h + 0.12, b.w + 0.12)
+  boxes.add(m.brandTeal, 0.058, b.y - b.h / 2 - 0.035, b.z, 0.01, 0.025, b.w + 0.12)
+  const PX = 220
+  let layout = null
+  const panel = canvasPanel(b.w, b.h, (g, w, h) => {
+    g.fillStyle = '#0c2e29'
+    g.fillRect(0, 0, w, h)
+    const fontPx = Math.round(h * 0.46)
+    g.font = `700 ${fontPx}px "Clash Display", "Avenir Next", Futura, "Segoe UI", sans-serif`
+    g.letterSpacing = `${Math.round(fontPx * 0.14)}px`
+    g.textBaseline = 'middle'
+    g.fillStyle = '#f3f6f4'
+    const wB = g.measureText('B').width
+    const wRest = g.measureText('Z APPS').width
+    const slot = fontPx * 1.22
+    const start = (w - (wB + slot + wRest)) / 2
+    g.fillText('B', start, h * 0.53)
+    g.fillText('Z APPS', start + wB + slot, h * 0.53)
+    layout = { center: (start + wB + slot / 2) / w, em: fontPx / PX }
+  })
+  panel.mesh.material.emissiveIntensity = 0.7
+  panel.mesh.rotation.y = Math.PI / 2
+  panel.mesh.position.set(0.057, b.y, b.z)
+  group.add(panel.mesh)
+  const radius = 0.53 * layout.em
+  const unit = radius / 11.7
+  const propeller = new THREE.Group()
+  propeller.position.set(0.085, b.y + 0.01, b.z - (layout.center - 0.5) * b.w)
+  const bladeGeo = new THREE.SphereGeometry(1, 24, 16)
+  for (let i = 0; i < 3; i++) {
+    const arm = new THREE.Group()
+    arm.rotation.x = (i * Math.PI * 2) / 3
+    const blade = new THREE.Mesh(bladeGeo, m.brandTeal)
+    blade.scale.set(0.014, 5.7 * unit, 2.9 * unit)
+    blade.position.y = 6 * unit
+    blade.castShadow = true
+    arm.add(blade)
+    propeller.add(arm)
+  }
+  const hub = new THREE.Mesh(new THREE.CylinderGeometry(3.1 * unit, 3.1 * unit, 0.04, 28), m.brandTeal)
+  hub.rotation.z = Math.PI / 2
+  propeller.add(hub)
+  const cap = new THREE.Mesh(new THREE.SphereGeometry(1.4 * unit, 16, 12), colored('#f3f6f4', { roughness: 0.3 }))
+  cap.position.x = 0.025
+  propeller.add(cap)
+  group.add(propeller)
+  return propeller
 }
 
 export { roundedBox, unitBox, colored, drawBoard }

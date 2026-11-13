@@ -2,7 +2,7 @@
 // Data comes from /api/state (what each session's mod published); everything else is here.
 import {
   BASE_PALETTE, BOOKS, BOOKS_PALETTE, CHAIR, CHAIR_PALETTE, CHAIR_PLAIN_PALETTE, CHECK, DESK, DESK_PALETTE, DOG,
-  DOG_PALETTE, DUCK, DUCK_PALETTE, ESPRESSO, ESPRESSO_PALETTE, INK, LAMP, MONITOR2, MONITOR2_PALETTE, MUG, MUG_PALETTE,
+  DOG_PALETTE, DOG_PALETTE_BLUE, DUCK, DUCK_PALETTE, ESPRESSO, ESPRESSO_PALETTE, INK, LAMP, MONITOR2, MONITOR2_PALETTE, MUG, MUG_PALETTE,
   PAPER, PAPER_PALETTE, PASTRY, PASTRY_PALETTE, PHONE, PHONE_PALETTE, PHOTO, PHOTO_PALETTE, PLANT, PLANT_PALETTE,
   PLANT_SMALL, hash, lookOf, mascot, mini, person, raster,
 } from './sprites.js'
@@ -373,7 +373,7 @@ const lastState = new Map()
 const lastPr = new Map()
 const particles = []
 let manager = null
-let dog = null
+const dogs = []
 let selected = null
 let isFirstLoad = true
 
@@ -611,9 +611,12 @@ function syncEntities(sessions) {
     manager = spawn('manager', [4, 7], { id: 'manager', home: [4, 7], nextWalk: now + rnd(40_000, 90_000) })
     manager.goal = [4, 7]
   }
-  if (!dog) {
-    dog = spawn('dog', [13, 20], { id: 'dog', nextMove: now + 2000 })
-    dog.goal = [13, 20]
+  if (dogs.length === 0) {
+    for (const [id, at, palette] of [['dog', [13, 20], DOG_PALETTE], ['dog-blue', [13, 8], DOG_PALETTE_BLUE]]) {
+      const dog = spawn('dog', at, { id, palette, nextMove: now + rnd(1500, 4000) })
+      dog.goal = at
+      dogs.push(dog)
+    }
   }
   isFirstLoad = false
 }
@@ -681,7 +684,8 @@ function behave(now) {
     walkTo(manager, home ? [8, 7] : manager.home)
     manager.nextWalk = now + (home ? 6000 : rnd(40_000, 90_000))
   }
-  if (dog && now > dog.nextMove && dog.path.length === 0) {
+  for (const dog of dogs) {
+    if (now <= dog.nextMove || dog.path.length > 0) continue
     const spots = []
     for (let r = 0; r < layout.ROWS; r++) for (let c = HALL.x0; c <= HALL.x1; c++) if (isFree(c, r)) spots.push([c, r])
     for (let r = 33; r <= 37; r++) for (let c = 0; c <= 10; c++) if (isFree(c, r)) spots.push([c, r])
@@ -1281,7 +1285,7 @@ function shadow(x, y, rx = 6) {
 }
 
 function drawEntities(now) {
-  const all = [...workers.values(), ...helpers.values(), manager, dog].filter(e => e && !e.hidden)
+  const all = [...workers.values(), ...helpers.values(), manager, ...dogs].filter(e => e && !e.hidden)
   all.sort((a, b) => a.y - b.y)
   for (const e of all) {
     const walking = e.isWalking
@@ -1347,7 +1351,7 @@ function drawEntities(now) {
     } else if (e.kind === 'dog') {
       const f = walking ? Math.floor(e.frame / 5) % 4 : 0
       shadow(e.x, e.y + 8, 6)
-      sprite(raster(DOG[f], DOG_PALETTE, `dog${f}`), e.x - 7, e.y + 1, e.dir < 0)
+      sprite(raster(DOG[f], e.palette ?? DOG_PALETTE, `${e.id}${f}`), e.x - 7, e.y + 1, e.dir < 0)
       if (outage?.level === 'down' && Math.floor(now / 900) % 3 === 0) bubble('woof!', e.x, e.y - 2, '#ffffff', '#333')
     }
   }
@@ -1399,7 +1403,7 @@ function simulate() {
   const dt = (now - simAt) / 1000
   simAt = now
   if (!layout) return
-  for (const e of [...workers.values(), ...helpers.values(), manager, dog]) if (e) step(e, dt)
+  for (const e of [...workers.values(), ...helpers.values(), manager, ...dogs]) if (e) step(e, dt)
   behave(now)
   updateParticles(Math.min(dt, 0.2))
 }

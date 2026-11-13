@@ -27,7 +27,7 @@ export function createSim(world) {
     workers: new Map(),
     helpers: new Map(),
     manager: null,
-    dog: null,
+    dogs: [],
     reserved: new Map(),
     delivered: new Set(),
     everSeen: new Set(),
@@ -303,16 +303,23 @@ export function sync(sim, sessions, outage, now) {
     const home = plan.zones.manager.home
     sim.manager = { kind: 'manager', id: 'manager', fig, x: home.x, z: home.z, rot: 0, heading: 0, path: [], target: home, dest: 'home', nextWalk: now + rnd(40_000, 90_000) }
   }
-  if (!sim.dog) {
-    const fig = makeDog()
-    sim.group.add(fig.root)
+  if (sim.dogs.length === 0) {
     const cafe = plan.rooms.find(r => r.id === 'cafe')
-    sim.dog = { kind: 'dog', id: 'dog', fig, x: cafe.x + 6.5, z: cafe.z + 3, rot: 0, heading: 0, path: [], target: null, dest: null, nextMove: now + 2000 }
+    const corridor = plan.zones.manager.room.d + 1.0
+    const starts = [
+      { id: 'dog', collar: '#e0484d', x: cafe.x + 6.5, z: cafe.z + 3 },
+      { id: 'dog-blue', collar: '#2f6fe0', x: plan.width / 2, z: corridor },
+    ]
+    for (const start of starts) {
+      const fig = makeDog(start.collar)
+      sim.group.add(fig.root)
+      sim.dogs.push({ kind: 'dog', id: start.id, fig, x: start.x, z: start.z, rot: 0, heading: 0, path: [], target: null, dest: null, nextMove: now + rnd(1500, 4000) })
+    }
   }
   sim.isFirstLoad = false
 }
 
-/** Timed behaviour: trips to the WC, café chats and poses, deliveries, the panic, the manager's rounds, the dog. */
+/** Timed behaviour: trips to the WC, café chats and poses, deliveries, the panic, the manager's rounds, the dogs. */
 export function behave(sim, now) {
   const { plan } = sim
   for (const w of [...sim.workers.values()]) {
@@ -382,8 +389,8 @@ export function behave(sim, now) {
       m.nextWalk = now + (isHome ? 6000 : rnd(40_000, 90_000))
     }
   }
-  const dog = sim.dog
-  if (dog && now > dog.nextMove && dog.path.length === 0) {
+  for (const dog of sim.dogs) {
+    if (now <= dog.nextMove || dog.path.length > 0) continue
     const spot = panicSpot(sim, dog)
     if (spot) {
       dog.target = spot
@@ -446,7 +453,7 @@ function updateParticles(sim, dt) {
 
 /** Moves everyone by `dt` seconds and poses them. */
 export function update(sim, dt, now) {
-  const all = [...sim.workers.values(), ...sim.helpers.values(), sim.manager, sim.dog].filter(Boolean)
+  const all = [...sim.workers.values(), ...sim.helpers.values(), sim.manager, ...sim.dogs].filter(Boolean)
   for (const e of all) stepEntity(sim, e, dt)
   const t = now / 1000
   const isDown = sim.outage?.level === 'down'
