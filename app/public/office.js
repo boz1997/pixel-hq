@@ -132,19 +132,24 @@ let outage = null
 
 /**
  * Whether Claude is in trouble: `down` while the status page reports an outage or a major incident on Claude Code or
- * the API, or sessions keep dying on overloaded and server errors; `slow` for a lesser incident. `?outage` runs a drill.
+ * the API, or sessions keep dying on overloaded and server errors; `slow` for a lesser incident, or once Anthropic is
+ * monitoring a fix and nothing else is open. `?outage` runs a drill.
  */
 function outageOf(now) {
   if (IS_DRILL) return { level: 'down', title: 'fire drill: this is what an outage looks like', link: null }
   const status = data.status && now - data.status.at < STATUS_STALE_MS ? data.status : null
-  const incident = status?.incidents?.find(i => i.impact === 'major' || i.impact === 'critical')
-  const broken = status?.components?.find(c => c.status === 'major_outage' || c.status === 'partial_outage')
+  const active = (status?.incidents ?? []).filter(i => i.status !== 'monitoring')
+  const watched = (status?.incidents ?? []).filter(i => i.status === 'monitoring')
+  const incident = active.find(i => i.impact === 'major' || i.impact === 'critical')
+  const isFixOut = active.length === 0 && watched.length > 0
+  const broken = isFixOut ? undefined : status?.components?.find(c => c.status === 'major_outage' || c.status === 'partial_outage')
   const failing = Object.values(data.lives).filter(l => l.trouble && OUTAGE_ERRORS.has(l.trouble.error) && now - l.trouble.at < TROUBLE_MS)
   if (incident || broken || failing.length > 0) {
     const title = incident?.name ?? (broken ? `${broken.name}: ${broken.status.replace(/_/g, ' ')}` : `${failing.length} session${failing.length === 1 ? '' : 's'} hit ${failing[0].trouble.error.replace(/_/g, ' ')}`)
     return { level: 'down', title, link: incident || broken ? STATUS_PAGE : null }
   }
-  const minor = status?.incidents?.[0]
+  if (isFixOut) return { level: 'slow', title: `monitoring a fix: ${watched[0].name}`, link: STATUS_PAGE }
+  const minor = active[0]
   const degraded = status?.components?.find(c => c.status === 'degraded_performance')
   if (minor || degraded) return { level: 'slow', title: minor?.name ?? `${degraded.name}: degraded performance`, link: STATUS_PAGE }
   return null
