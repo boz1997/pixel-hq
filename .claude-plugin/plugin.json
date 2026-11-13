@@ -1,7 +1,7 @@
 {
   "name": "pixel-hq",
-  "version": "0.2.0",
-  "description": "A pixel-art office of every Claude Code session in the desktop app: rooms per sidebar group, a desk per session, Claude as the manager, live states.",
+  "version": "0.3.0",
+  "description": "A 3D office of every Claude Code session in the desktop app: a glass room per sidebar group, a desk per session, Claude as the manager, live states, cards, a tour and tasks.",
   "author": {
     "name": "Berk Özdoruk",
     "url": "https://github.com/boz1997"

@@ -25,6 +25,15 @@ export type LogEntry = { at: number; tool: string; verb: string; detail: string;
 /** The API error a turn of the session last died on, in Claude Code's word for it: `overloaded`, `server_error`, `rate_limit`... */
 export type Trouble = { at: number; error: string; detail: string }
 
+/** What a finished turn left: the files it wrote and the gist of its answer. */
+export type Result = { at: number; files: string[]; summary: string }
+
+/** A task from the office app, as its server wrote it to the inbox. */
+export type Task = { id: string; at: number; to: string; text: string }
+
+/** Where a task stands, as the session handling it published it for the office. */
+export type TaskStatus = { status: 'routing' | 'routed' | 'sending' | 'sent' | 'failed'; at: number; by: string; to?: string; toTitle?: string; error?: string }
+
 /** One session as its own mod instance publishes it to the shared store. */
 export type Live = {
   id: string
@@ -44,6 +53,9 @@ export type Live = {
   context?: number
   limits?: Limit[]
   trouble?: Trouble
+  model?: string
+  result?: Result
+  features?: string[]
   turns: number
   log: LogEntry[]
 }

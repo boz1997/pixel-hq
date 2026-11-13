@@ -3,6 +3,7 @@ import type { EngineInterface, Register } from 'claude-code'
 
 import type { DeskState, Helper, Live, LogEntry, Office, Plan } from '../types'
 import { fetchPlan, fetchRoster, fetchSelf, forget, publish, readLives, readPlan, SESSIONS, sharePlan } from './hq'
+import { handleTasks } from './tasks'
 import { ago, buildRooms, clip, detailFor, gist, shownState, verbFor } from './model'
 import type { Desk, Room } from './model'
 import { W, drawOffice, heightOf, summary } from './scene'
@@ -34,6 +35,7 @@ const EMPTY_ME: Live = {
 const INITIAL: Office = { me: EMPTY_ME, lives: {} }
 
 const LOG_KEPT = 20
+const WRITE_TOOLS = new Set(['Write', 'Edit', 'MultiEdit', 'NotebookEdit'])
 
 /** Keeps one tool call in this session's activity log, which the office viewer reads. */
 const logCall = ($: EngineInterface, tool: string, verb: string, detail: string, who?: string) =>
@@ -119,6 +121,8 @@ let rosterAskedAt = 0
 const announced = new Set<string>()
 let rosterAsks = 0
 let planAskedAt = 0
+let turnFiles: string[] = []
+let isHandlingTasks = false
 
 /** The plan's limits: the freshest any session published, read again from the app once a minute. */
 async function planOf($: EngineInterface, now: number, known: Plan | undefined): Promise<Plan | undefined> {
@@ -182,6 +186,14 @@ async function tick($: EngineInterface): Promise<void> {
     })
   }
   const plan = await planOf($, now, current.plan)
+  if (!isHandlingTasks) {
+    isHandlingTasks = true
+    await handleTasks($, now, current.me, lives, roster)
+      .catch(error => $.ui.log(`pixel-hq tasks: ${String(error)}`, { to: 'debug' }))
+      .finally(() => {
+        isHandlingTasks = false
+      })
+  }
   const next: Office = { ...current, lives, roster, note, plan }
   if (fingerprint(next, now) === fingerprint(current, now)) return
   await update($, office, value => ({ ...value, lives, roster, note, plan }))
@@ -235,7 +247,7 @@ export const register: Register = on => {
     await update($, office, value => ({
       ...value,
       // A start, or a reload, finds no turn running: the desk is idle until the next event.
-      me: { ...EMPTY_ME, ...value.me, id, ccdId: value.me.ccdId || `local_${id}`, cwd, title: value.me.title || baseName(cwd), at: now, since: now, state: 'idle' as DeskState, verb: 'idle', detail: '', tool: undefined },
+      me: { ...EMPTY_ME, ...value.me, id, ccdId: value.me.ccdId || `local_${id}`, cwd, title: value.me.title || baseName(cwd), at: now, since: now, state: 'idle' as DeskState, verb: 'idle', detail: '', tool: undefined, features: ['tasks'] },
     }))
     await publish($, (await read($, office)).me)
     $.clock.every(TICK_MS, () => void tick($).catch(error => $.ui.log(`pixel-hq tick: ${String(error)}`, { to: 'debug' })))
@@ -268,6 +280,7 @@ export const register: Register = on => {
   })
 
   on('prompt.submit', async ($, e, next) => {
+    turnFiles = []
     await setMe($, (me, now) => ({ state: 'working', verb: 'reading', detail: gist(e.text, 24), tool: undefined, since: now, turns: me.turns + 1, helpers: me.helpers.filter(h => !h.isDone) }))
 
     return next(e)
@@ -304,6 +317,10 @@ export const register: Register = on => {
       } else {
         await logCall($, tool, verbFor(tool), detailFor(tool, input))
         await setState($, 'working', verbFor(tool), detailFor(tool, input), tool)
+        if (WRITE_TOOLS.has(tool) && typeof input.file_path === 'string') {
+          const file = baseName(input.file_path)
+          turnFiles = [...turnFiles.filter(f => f !== file), file].slice(-6)
+        }
       }
     }
 
@@ -356,7 +373,9 @@ export const register: Register = on => {
     } else {
       const isOk = e.reason === 'answer'
       await setState($, isOk ? 'done' : 'failed', isOk ? 'done' : e.reason, isOk ? gist(e.answer, 40) : e.reason, undefined)
-      if (isOk) await setMe($, () => ({ trouble: undefined }))
+      const model = e.usage?.model
+      if (isOk) await setMe($, (me, now) => ({ trouble: undefined, result: { at: now, files: turnFiles, summary: gist(e.answer, 140) }, ...(model ? { model } : {}) }))
+      else if (model) await setMe($, () => ({ model }))
     }
     const completed = await next(e)
     if (e.agentId === undefined) void refreshUsage($)

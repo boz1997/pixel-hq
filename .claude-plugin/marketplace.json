@@ -5,7 +5,7 @@
     {
       "name": "pixel-hq",
       "source": "./",
-      "description": "A pixel-art office of every Claude Code session in the desktop app: rooms per sidebar group, a desk per session, Claude as the manager, live states."
+      "description": "A 3D office of every Claude Code session in the desktop app: a glass room per sidebar group, a desk per session, Claude as the manager, live states, cards, a tour and tasks."
     }
   ]
 }

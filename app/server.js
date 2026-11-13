@@ -1,4 +1,5 @@
 import { exec } from 'node:child_process'
+import { randomUUID } from 'node:crypto'
 import fs from 'node:fs'
 import http from 'node:http'
 import os from 'node:os'
@@ -9,6 +10,8 @@ import { demoState } from './demo.js'
 
 const PUBLIC = path.join(path.dirname(fileURLToPath(import.meta.url)), 'public')
 const STORE_DIR = path.join(os.homedir(), '.claude', 'plugins', 'store')
+const INBOX = path.join(os.homedir(), '.pixel-hq', 'inbox')
+const TASK_MAX = 4000
 const STATUS_URL = 'https://status.claude.com/api/v2/summary.json'
 const STATUS_MS = 60_000
 const WATCHED = /^(Claude Code|Claude API)\b/
@@ -38,6 +41,7 @@ function storeFiles() {
 /** The office as the sessions last published it: their desks, and the sidebar's rooms. */
 export function readState() {
   const lives = {}
+  const tasks = {}
   let roster = null
   let plan = null
   const files = storeFiles()
@@ -59,9 +63,13 @@ export function readState() {
       if (key === 'plan' && value && typeof value === 'object' && Array.isArray(value.windows)) {
         if (!plan || (value.at ?? 0) > (plan.at ?? 0)) plan = value
       }
+      if (key.startsWith('task:') && value && typeof value === 'object' && typeof value.status === 'string') {
+        const id = key.slice(5)
+        if (!tasks[id] || (value.at ?? 0) >= (tasks[id].at ?? 0)) tasks[id] = { status: value.status, at: value.at, to: value.to, toTitle: value.toTitle, error: value.error }
+      }
     }
   }
-  return { at: Date.now(), roster, lives, plan, sources: files.length }
+  return { at: Date.now(), roster, lives, plan, tasks, sources: files.length }
 }
 
 /** What Anthropic's public status page says of Claude Code and the API: their components, and their incidents not yet resolved. */
@@ -94,6 +102,84 @@ function watchStatus() {
   void ask()
   setInterval(ask, STATUS_MS).unref()
   return watch
+}
+
+// ------------------------------------------------------------------ tasks
+
+const isLoopback = req => ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.socket.remoteAddress)
+
+/** The names this server answers to: a request for any other host is a page that rebound its name to this machine. */
+function knownHosts(port) {
+  const hostname = os.hostname().replace(/\.local$/, '')
+  return new Set(['localhost', '127.0.0.1', '[::1]', `${hostname}.local`, hostname, ...networkAddresses().map(a => a.address)].map(h => `${h}:${port}`.toLowerCase()))
+}
+
+/** Whether this request may hand the sessions a task: this computer, or another device with the password. */
+function mayTask(req, { port, password, demo }) {
+  if (demo) return false
+  const host = String(req.headers.host ?? '').toLowerCase()
+  if (!knownHosts(port).has(host)) return false
+  const origin = req.headers.origin
+  if (origin !== undefined && origin !== `http://${host}`) return false
+  if (isLoopback(req)) return true
+  return Boolean(password) && req.headers['x-pixel-hq-password'] === password
+}
+
+function readBody(req, limit) {
+  return new Promise((resolve, reject) => {
+    let size = 0
+    const chunks = []
+    req.on('data', chunk => {
+      size += chunk.length
+      if (size > limit) {
+        reject(new Error('too large'))
+        req.destroy()
+        return
+      }
+      chunks.push(chunk)
+    })
+    req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')))
+    req.on('error', reject)
+  })
+}
+
+/** Takes a task from the page and drops it in the inbox, where the mod of the right session picks it up. */
+async function takeTask(req, res, options) {
+  const json = (status, body) => send(res, status, TYPES['.json'], JSON.stringify(body))
+  if (!mayTask(req, options)) return json(403, { error: options.demo ? 'the demo office takes no tasks' : 'tasks go out from this computer, or from another device with --password' })
+  if (req.headers['x-pixel-hq-task'] !== '1' || !String(req.headers['content-type'] ?? '').startsWith('application/json')) return json(400, { error: 'not a task request' })
+  let body
+  try {
+    body = JSON.parse(await readBody(req, 16 * 1024))
+  } catch {
+    return json(400, { error: 'unreadable task' })
+  }
+  const text = typeof body?.text === 'string' ? body.text.trim() : ''
+  const to = typeof body?.to === 'string' ? body.to : ''
+  if (text === '' || text.length > TASK_MAX) return json(400, { error: `a task is 1 to ${TASK_MAX} characters` })
+  const known = new Set((readState().roster?.sessions ?? []).map(s => s.ccdId))
+  if (to !== 'auto' && !known.has(to)) return json(400, { error: 'no such session in the sidebar' })
+  const id = randomUUID()
+  fs.mkdirSync(INBOX, { recursive: true, mode: 0o700 })
+  fs.writeFileSync(path.join(INBOX, `${id}.json`), JSON.stringify({ id, at: Date.now(), to, text }), { mode: 0o600 })
+  return json(200, { id })
+}
+
+/** Clears the inbox of tasks that are settled or too old to matter. */
+function sweepInbox() {
+  try {
+    const { tasks } = readState()
+    const now = Date.now()
+    for (const name of fs.readdirSync(INBOX)) {
+      const full = path.join(INBOX, name)
+      const age = now - fs.statSync(full).mtimeMs
+      const status = tasks[name.replace(/\.json$/, '')]?.status
+      if (age > 24 * 3600_000 || (age > 3600_000 && (status === 'sent' || status === 'failed'))) fs.rmSync(full, { force: true })
+    }
+  } catch {
+    return undefined
+  }
+  return undefined
 }
 
 function send(res, status, type, body) {
@@ -151,6 +237,7 @@ function networkAddresses() {
 export function startServer({ port = 2323, host = '0.0.0.0', open = true, asApp = true, password, demo = false, status = true } = {}) {
   const watch = !demo && status ? watchStatus() : null
   const state = () => (demo ? demoState() : { ...readState(), status: watch?.value ?? null })
+  if (!demo) setInterval(sweepInbox, 60_000).unref()
   const server = http.createServer((req, res) => {
     const url = new URL(req.url, 'http://localhost')
     if (url.pathname === '/api/state') {
@@ -158,7 +245,11 @@ export function startServer({ port = 2323, host = '0.0.0.0', open = true, asApp 
         send(res, 401, TYPES['.json'], JSON.stringify({ error: 'wrong password' }))
         return
       }
-      send(res, 200, TYPES['.json'], JSON.stringify(state()))
+      send(res, 200, TYPES['.json'], JSON.stringify({ ...state(), canTask: mayTask(req, { port, password, demo }) }))
+      return
+    }
+    if (url.pathname === '/api/task' && req.method === 'POST') {
+      void takeTask(req, res, { port, password, demo }).catch(error => send(res, 500, TYPES['.json'], JSON.stringify({ error: String(error.message ?? error) })))
       return
     }
     if (req.method !== 'GET' && req.method !== 'HEAD') {

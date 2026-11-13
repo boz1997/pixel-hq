@@ -1,6 +1,6 @@
 import type { EngineInterface } from 'claude-code'
 
-import type { Live, Plan, PlanWindow, Roster, RosterGroup, RosterSession } from '../types'
+import type { Live, Plan, PlanWindow, Roster, RosterGroup, RosterSession, Task, TaskStatus } from '../types'
 import { norm } from './model'
 
 export const SESSIONS = 'ccd_session_mgmt'
@@ -8,6 +8,7 @@ export const SIDEBAR = 'ccd_sidebar'
 
 const LIVE = 'live:'
 const PLAN = 'plan'
+const TASK = 'task:'
 const DAY_MS = 24 * 60 * 60_000
 
 const asRecord = (value: unknown): Record<string, unknown> =>
@@ -107,6 +108,46 @@ export async function readPlan($: EngineInterface): Promise<Plan | undefined> {
 
 export async function sharePlan($: EngineInterface, plan: Plan): Promise<void> {
   await $.store.set(PLAN, plan)
+}
+
+/** The folder the office app drops its tasks in, one JSON file each. */
+export const inboxOf = (home: string): string => `${home}/.pixel-hq/inbox`
+
+/** The tasks waiting in the inbox, each checked for its shape and cut to a sane length. */
+export async function readTasks($: EngineInterface, home: string): Promise<Task[]> {
+  const dir = inboxOf(home)
+  if (!(await $.fs.exists(dir).catch(() => false))) return []
+  const entries = await $.fs.list(dir).catch(() => [])
+  const tasks: Task[] = []
+  for (const entry of entries) {
+    if (entry.kind !== 'file' || !/^[a-z0-9-]{8,64}\.json$/i.test(entry.name)) continue
+    const text = await $.fs.read(`${dir}/${entry.name}`).catch(() => undefined)
+    if (typeof text !== 'string') continue
+    let raw: unknown
+    try {
+      raw = JSON.parse(text)
+    } catch {
+      continue
+    }
+    const r = asRecord(raw)
+    if (typeof r.id !== 'string' || `${r.id}.json` !== entry.name || typeof r.at !== 'number' || typeof r.to !== 'string' || typeof r.text !== 'string') continue
+    tasks.push({ id: r.id, at: r.at, to: r.to, text: r.text.slice(0, 4000) })
+  }
+  return tasks
+}
+
+const isTaskStatus = (value: unknown): value is TaskStatus => {
+  const r = asRecord(value)
+  return typeof r.status === 'string' && typeof r.at === 'number'
+}
+
+export async function readTaskStatus($: EngineInterface, id: string): Promise<TaskStatus | undefined> {
+  const value = await $.store.get(TASK + id)
+  return isTaskStatus(value) ? value : undefined
+}
+
+export async function writeTaskStatus($: EngineInterface, id: string, status: TaskStatus): Promise<void> {
+  await $.store.set(TASK + id, status)
 }
 
 const isLive = (value: unknown): value is Live => {

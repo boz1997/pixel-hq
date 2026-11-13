@@ -1,7 +1,12 @@
 # Changelog
 
-## Unreleased
+## 0.3.0 — the 3D office
 
+- **The 3D office**, now the main view: an isometric office with glass rooms per sidebar group, wooden floors, windows, a corner office for Claude, a meeting room, a library, a studio, a café and a WC, people who sit, type, walk and wave, subagents, a black labrador, day and night. Drag to turn it, scroll to zoom, click anyone for their card. The pixel office stays at `/pixel.html`.
+- **Cards and a guided tour**: a card per session with what it does, its model, its pull request, its last result, its subagents and its latest calls, with Open in Claude and Message; ▶ Tour flies the camera from desk to desk.
+- **Results on the desk**: the mod publishes the files a turn wrote and the gist of its answer; the office shows them on the desk and in a "Done ✓" bubble.
+- **Tasks from the office**: a task bar sends a task to a session, or lets Claude Haiku pick one by the sessions' titles. Tasks go out only from this computer or with `--password`, are checked for their origin, and reach a session through its own mod, or as a message from another session.
+- **Idle people stay at their desks** and take a break now and then, so a quiet office still looks like one at work.
 - **When Claude is down, the office panics**: the app reads Anthropic's public status page once a minute (`--no-status` turns it off) and the mod reports the turns the API killed. On an outage or a major incident on Claude Code or the API, or sessions dying on overloaded and server errors, the office flashes red under sirens, a banner names the incident, and everyone runs around shouting while the manager asks for calm; calm mode keeps them at their desks, shaking. A lesser incident, or one whose fix Anthropic is monitoring, shows a yellow banner alone. `?outage` in the address runs a drill.
 - **Plan limits on the USAGE board**: the mod reads the desktop app's usage card once a minute, one session for all, and the board shows every limit on it, the per-model weekly one such as Fable included, with when a spent one resets. The red lamp blinks near a limit; once one is spent it flashes and washes the manager's office in red, held still for reduced motion. Without a reading the board falls back to the session's own windows.
 
