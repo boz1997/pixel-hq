@@ -8,6 +8,15 @@ import { buildStaticLabels, createUi, select, showGate, stopTour, tickTour, upda
 import { REDUCED_MOTION } from './util.js'
 import { buildOffice, createWorld } from './world.js'
 
+// A page the browser zoomed (a pinch before pinches were the office's) comes back zoomed on a reload, and then the
+// cards hang off the screen: a fresh load starts it at its own size.
+const isZoomed = () => (window.visualViewport?.scale ?? 1) > 1.01
+const unzoom = () => {
+  sessionStorage.setItem('pixel-hq-unzoom', String(Date.now()))
+  location.replace(location.href.split('#')[0])
+}
+if (isZoomed() && Date.now() - Number(sessionStorage.getItem('pixel-hq-unzoom') ?? 0) > 15_000) unzoom()
+
 const world = createWorld(document.getElementById('stage'))
 const sim = createSim(world)
 let plan = null
@@ -16,7 +25,7 @@ let outage = null
 
 const ui = createUi(world, sim, {
   poll: tick,
-  fit: () => frameAll(),
+  fit: () => (isZoomed() ? unzoom() : frameAll()),
   onModeChange: () => {
     for (const e of [...sim.workers.values(), ...sim.helpers.values()]) {
       e.dest = null
@@ -37,6 +46,9 @@ ui.flyToSession = (id, isBrief) => {
   if (at) flyTo({ x: at.x, y: 0.7, z: at.z }, isBrief ? 11 : 8.5, true)
 }
 ui.onTourEnd = () => frameAll()
+window.visualViewport?.addEventListener('resize', () => {
+  if (isZoomed()) ui.toast('The page is zoomed in: press ⤢ to set it right.')
+})
 
 // ------------------------------------------------------------------ the camera
 
