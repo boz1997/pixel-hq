@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **The card stays on screen**: a pinch anywhere zooms the office, never the page, so a zoomed page no longer pushes the card past the right edge; the card narrows to fit a small window.
 - **The Boz Apps wall**: the maker's wordmark on the office's left wall, its O a propeller that turns, as on bozapps.net.
 - **Moving about like a map**: drag to move, right-drag or double-click and drag to turn and tilt, the wheel or a pinch zooms toward the pointer, two fingers on a trackpad slide, the arrow keys or WASD walk with Q E to turn, R F to tilt and + − to zoom, a double-click zooms in on a spot or flies to a person; the view stays over the office, and a ? card lists the moves.
 - **A second black labrador**, with a blue collar, in both offices; each dog now wears a gold tag.

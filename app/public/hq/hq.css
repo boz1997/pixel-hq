@@ -97,7 +97,9 @@ body.is-down #vignette { opacity: 1; animation: siren 0.75s ease-in-out infinite
 #taskbar.off .btn.primary { opacity: 0.45; pointer-events: none; }
 #ticker { margin-top: 8px; color: var(--ink-3); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 #ticker b { color: var(--ink-2); }
-#card { position: fixed; right: 16px; top: 62px; bottom: 150px; width: 330px; padding: 16px; overflow: auto; display: none; z-index: 2; }
+#card { position: fixed; right: 16px; top: 62px; bottom: 150px; width: min(330px, calc(100vw - 32px)); padding: 16px; overflow: auto; display: none; z-index: 2; }
+#card * { max-width: 100%; }
+#card .chips { overflow: hidden; }
 #card.open { display: block; }
 #card .dept-line { display: flex; align-items: center; gap: 7px; color: var(--ink-3); font: 700 10px/1 var(--font); letter-spacing: 1px; text-transform: uppercase; }
 #card .dept-line i { width: 8px; height: 8px; border-radius: 50%; }

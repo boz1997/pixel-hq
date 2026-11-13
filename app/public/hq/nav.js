@@ -58,6 +58,10 @@ export function createNav(world, { onMove, onDoubleClick, bounds }) {
   })
   stage.addEventListener('contextmenu', e => e.preventDefault())
 
+  // A pinch anywhere zooms the office, never the page: a page zoomed by the browser pushes the cards off the screen.
+  window.addEventListener('wheel', e => e.ctrlKey && e.preventDefault(), { passive: false })
+  for (const type of ['gesturestart', 'gesturechange', 'gestureend']) document.addEventListener(type, e => e.preventDefault(), { passive: false })
+
   // Two fingers on a trackpad slide the office; a pinch and a mouse wheel zoom, as the controls already do.
   stage.addEventListener(
     'wheel',
